@@ -37,19 +37,23 @@ bands:
         resolution: 30
   B61:
         type: TOA Normalised Brightness Temperature
-        LMAX: 12.65
-        LMIN: 3.2
-        QCALMAX: 255
-        QCALMIN: 1
+        gain:  0.067087
+        offset: -0.06709
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
         band_centre: 11335
         band_width:  2050
         resolution: 60
   B62:
         type: TOA Normalised Brightness Temperature
-        LMAX: 12.65
-        LMIN: 3.2
-        QCALMAX: 255
-        QCALMIN: 1
+        gain:  0.037205
+        offset: 3.16280
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
         band_centre: 11335
         band_width:  2050
         resolution: 60
