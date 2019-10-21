@@ -68,11 +68,12 @@ class Dataset(ABC):
         return band
         
     @staticmethod
-    def resize(image, scale=None):
+    def resize(image_and_scale):
+        image, scale = image_and_scale
         if scale is None:
             return image
 
-        return transform.rescale(
+        image = transform.rescale(
             image,
             scale + 0.0001,
             anti_aliasing=True,
@@ -80,6 +81,7 @@ class Dataset(ABC):
             preserve_range=True,
             multichannel=False
         )
+        return image
 
 
     def load_bands(self, ids, files, resize=True):
@@ -99,7 +101,7 @@ class Dataset(ABC):
             bands_data = pool.map(self.read, files)
 
             # Normalise the data
-            bands_data = pool.map(self.normalise, zip(ids, bands_data))
+            bands_data = list(pool.map(self.normalise, zip(ids, bands_data)))
 
             # Resize the bands:
             if resize:
@@ -108,11 +110,12 @@ class Dataset(ABC):
                     if metadata[band_id]['resolution'] != self.resolution else None
                     for band_id in ids
                 ]
-                bands_data = pool.map(
+                bands_data = list(pool.map(
                     self.resize, zip(bands_data, scales)
-                )
+                ))
 
-        return np.array(bands_data)
+        
+        return np.stack(bands_data)
 
 
     def split_and_save(self, image, mask, metadata, tile_name, patch_size, stride):
@@ -234,7 +237,7 @@ class L7Irish206(Dataset):
                 print('Missing bands:', set(required_bands.values()) - set(ids))
                 continue
                 
-            print(self.load_bands(ids, band_files))
+            print(self.load_bands(ids, band_files).shape)
             break
                 
 #             if any(os.path.isdir(child) for child in children):
@@ -309,7 +312,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('-g', '--generate_metadata', type=bool,
                             help='Whether to generate a metadata file for each image/mask pair', default=False)
     arg_parser.add_argument('-j', '--jobs', type=int,
-                            help='How many parallel jobs should be used to process the data.', default=1)
+                            help='How many parallel jobs should be used to process the data.', default=4)
 
 
     kwargs = vars(arg_parser.parse_args())
