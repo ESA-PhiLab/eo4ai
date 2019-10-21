@@ -1,66 +1,70 @@
 ---
 bands:
-  B10:
+  B1:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_1
         offset: REFLECTANCE_ADD_BAND_1
         band_centre: 491
         band_width: 73
         resolution: 30
-  B20:
+  B2:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_2
         offset: REFLECTANCE_ADD_BAND_2
         band_centre: 560
         band_width: 82
         resolution: 30
-  B30:
+  B3:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_3
         offset: REFLECTANCE_ADD_BAND_3
         band_centre: 662
         band_width: 61
         resolution: 30
-  B40:
+  B4:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_4
         offset: REFLECTANCE_ADD_BAND_4
         band_centre: 835
         band_width: 126
         resolution: 30
-  B50:
+  B5:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_5
         offset: REFLECTANCE_ADD_BAND_5
         band_centre: 1648
         band_width: 202
         resolution: 30
-  B61:
+  B6_VCID_1:
         type: TOA Normalised Brightness Temperature
-        LMAX: 12.65
-        LMIN: 3.2
-        QCALMAX: 255
-        QCALMIN: 1
+        gain:  0.067087
+        offset: -0.06709
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
         band_centre: 11335
         band_width:  2050
         resolution: 60
-  B62:
+  B6_VCID_2:
         type: TOA Normalised Brightness Temperature
-        LMAX: 12.65
-        LMIN: 3.2
-        QCALMAX: 255
-        QCALMIN: 1
+        gain:  0.037205
+        offset: 3.16280
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
         band_centre: 11335
         band_width:  2050
         resolution: 60
-  B70:
+  B7:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_7
         offset: REFLECTANCE_ADD_BAND_7
         band_centre: 2205
         band_width: 281
         resolution: 30
-  B80:
+  B8:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_8
         offset: REFLECTANCE_ADD_BAND_8
