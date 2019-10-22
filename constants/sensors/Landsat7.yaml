@@ -4,6 +4,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_1
         offset: REFLECTANCE_ADD_BAND_1
+        solar_correction: True
         band_centre: 491
         band_width: 73
         resolution: 30
@@ -11,6 +12,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_2
         offset: REFLECTANCE_ADD_BAND_2
+        solar_correction: True
         band_centre: 560
         band_width: 82
         resolution: 30
@@ -18,6 +20,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_3
         offset: REFLECTANCE_ADD_BAND_3
+        solar_correction: True
         band_centre: 662
         band_width: 61
         resolution: 30
@@ -25,6 +28,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_4
         offset: REFLECTANCE_ADD_BAND_4
+        solar_correction: True
         band_centre: 835
         band_width: 126
         resolution: 30
@@ -32,6 +36,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_5
         offset: REFLECTANCE_ADD_BAND_5
+        solar_correction: True
         band_centre: 1648
         band_width: 202
         resolution: 30
@@ -61,6 +66,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_7
         offset: REFLECTANCE_ADD_BAND_7
+        solar_correction: True
         band_centre: 2205
         band_width: 281
         resolution: 30
@@ -68,6 +74,7 @@ bands:
         type: TOA Reflectance
         gain: REFLECTANCE_MULT_BAND_8
         offset: REFLECTANCE_ADD_BAND_8
+        solar_correction: True
         band_centre: 705
         band_width: 381
         resolution: 15
