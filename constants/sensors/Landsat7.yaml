@@ -42,8 +42,8 @@ bands:
         resolution: 30
   B6_VCID_1:
         type: TOA Normalised Brightness Temperature
-        gain:  0.067087
-        offset: -0.06709
+        gain: RADIANCE_MULT_BAND_6_VCID_1
+        offset: RADIANCE_ADD_BAND_6_VCID_1
         K1: 666.09
         K2:  1282.71
         MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
@@ -53,8 +53,8 @@ bands:
         resolution: 60
   B6_VCID_2:
         type: TOA Normalised Brightness Temperature
-        gain:  0.037205
-        offset: 3.16280
+        gain:  RADIANCE_MULT_BAND_6_VCID_2
+        offset: RADIANCE_ADD_BAND_6_VCID_2
         K1: 666.09
         K2:  1282.71
         MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
