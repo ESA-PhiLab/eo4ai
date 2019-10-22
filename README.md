@@ -1,3 +1,5 @@
+# *---WORK IN PROGRESS---*
+
 # EO4AI
 ##### *Earth Observation preprocessing tools for AI and machine learning applications*
 
