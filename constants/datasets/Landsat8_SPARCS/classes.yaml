@@ -1,0 +1,11 @@
+#CLASS MAPPING
+#   NAME OF CLASS: VALUE IN DATASET MASK FILES
+---
+  SHADOW: [  0,   0,   0]
+  SHADOW OVER WATER: [  0,   0, 128]
+  WATER: [  0,   0, 255]
+  ICE/SNOW: [  0, 255, 255]
+  FLOODED: [128, 128,   0]
+  LAND: [128, 128, 128]
+  CLOUD: [255, 255, 255]
+...
