@@ -428,7 +428,8 @@ class L8SPARCS(Dataset):
 class L7Irish206(Dataset):
     def __init__(self, **kwargs):
         super().__init__(satellite_id='Landsat7', **kwargs)
-
+        #PLACEHOLDER FOR classes.yaml file. Need solution to Irish labelling problem.
+        self.classes = {'FILL': 0, 'SHADOW':1, 'CLEAR':2,'THIN CLOUD': 3, 'THICK CLOUD': 4}
     def get_tm(self, tile_name):
         filename = glob(
             join(abspath(dirname(__file__)), 'constants/datasets/Landsat7_Irish206', tile_name, '*_MTL.txt')
@@ -472,9 +473,9 @@ class L7Irish206(Dataset):
         descriptors = self.get_descriptors(required_bands.values())
         metadata = self.get_metadata(list(required_bands.values()))
         metadata['named_band'] = {
-            'RED': required_bands['B4'],
-            'GREEN': required_bands['B3'],
-            'BLUE': required_bands['B2']
+            'RED': required_bands['B30'],
+            'GREEN': required_bands['B20'],
+            'BLUE': required_bands['B10']
         }
 
         for directory in self.get_all_directories():
