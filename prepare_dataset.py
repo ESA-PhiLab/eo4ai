@@ -281,7 +281,7 @@ class L8Biome96(Dataset):
 
 
 
-class L8SPARCS(Dataset):
+class L8SPARCS80(Dataset):
     def __init__(self, **kwargs):
         self.dataset_bands = OrderedDict([
             ('B1', 'B1'),
@@ -297,13 +297,13 @@ class L8SPARCS(Dataset):
             ('B11', 'B11'),
         ])
         super().__init__(satellite_id='Landsat8',**kwargs)
-        self.L8SPARCS_resolution = 30
+        self.L8SPARCS80_resolution = 30
         self.mask_vals = []
         self.classes = self.get_classes()
 
     @staticmethod
     def get_classes():
-        with open(join(abspath(dirname(__file__)),'constants', 'datasets','Landsat8_SPARCS','classes.yaml'), 'r') as stream:
+        with open(join(abspath(dirname(__file__)),'constants', 'datasets','Landsat8_SPARCS80','classes.yaml'), 'r') as stream:
             try:
                 return yaml.safe_load(stream)
             except yaml.YAMLError as exc:
@@ -373,8 +373,8 @@ class L8SPARCS(Dataset):
         band_idxs = [i for i,k in enumerate(self.dataset_bands.keys()) if k in required_bands.keys()]
         bands = bands[...,band_idxs]
 
-        if self.L8SPARCS_resolution != self.resolution:
-            scale_factor = self.L8SPARCS_resolution / self.resolution
+        if self.L8SPARCS80_resolution != self.resolution:
+            scale_factor = self.L8SPARCS80_resolution / self.resolution
             target_size = int(bands.shape[0] * scale_factor), int(bands.shape[1] * scale_factor)
             bands = self.resize(bands,target_size)
 
@@ -384,8 +384,8 @@ class L8SPARCS(Dataset):
     def load_mask(self, tile_name):
         band_file = glob(join(self.in_path,tile_name+'*_mask.png'))[0]
         mask = imread(band_file)
-        if self.L8SPARCS_resolution != self.resolution:
-            scale_factor = self.L8SPARCS_resolution / self.resolution
+        if self.L8SPARCS80_resolution != self.resolution:
+            scale_factor = self.L8SPARCS80_resolution / self.resolution
             target_size = int(mask.shape[0] * scale_factor), int(mask.shape[1] * scale_factor)
             mask = self.resize_mask(mask,target_size)
 
@@ -602,7 +602,7 @@ if __name__ == '__main__':
 
     dataset_classes = {
         'L8Biome96': L8Biome96,
-        'L8SPARCS': L8SPARCS,
+        'L8SPARCS80': L8SPARCS80,
         'L7Irish206': L7Irish206,
         'S2CESBIO': S2CESBIO,
     }
