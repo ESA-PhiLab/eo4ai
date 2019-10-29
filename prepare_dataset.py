@@ -569,7 +569,7 @@ class L7Irish206(Dataset):
 
         if bm['type'] == 'TOA Normalised Brightness Temperature':
             data = (bm['K2']  / np.log(bm['K2'] / data + 1))
-            data = (data - (bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT']))
+            data = (data - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
 
         if bm.get('solar_correction', False):
             data /= math.sin(float(self.tm['SUN_ELEVATION'])*math.pi/180)
