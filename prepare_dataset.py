@@ -24,18 +24,6 @@ from skimage import transform
 from skimage.io import imread
 import json
 
-# TODO:
-#   1. Add classes.yaml for each satellite, find way to do this for Irish which
-#        has inconsistent classes. Read self.classes and metadata['classes']
-#        from here, not hardcoded.
-#
-#   2. Fix descriptors, currently +/- full bandwidth instead of half
-#
-#   3. Separate reading from encoding of mask, put encoding in abstract base class.
-#
-#   4. Move dataset_bands to a dataset/bands.yaml. No hardcoding of band names here.
-#
-#   5. Order methods more systematically
 
 class ReadingError(Exception):
     def __init__(self, message):
