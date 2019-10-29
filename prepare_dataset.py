@@ -93,7 +93,7 @@ class Dataset(ABC):
         for i, band in enumerate(bands):
             centre = self.sm['bands'][band]['band_centre']
             width = self.sm['bands'][band]['band_width']
-            descriptors[i, :] = [centre-width, centre, centre+width]
+            descriptors[i, :] = [centre-width/2, centre, centre+width/2]
 
         return descriptors
 
