@@ -1,0 +1,142 @@
+---
+spacecraft_id: Landsat8
+bands:
+  B1:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 443
+        band_width: 16
+        resolution: 30
+        descriptive_name: 'Aerosol'
+  B2:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 482
+        band_width: 60
+        resolution: 30
+        descriptive_name: 'Blue'
+
+  B3:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 562
+        band_width: 57
+        resolution: 30
+        descriptive_name: 'Green'
+
+  B4:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 655
+        band_width: 37
+        resolution: 30
+        descriptive_name: 'Red'
+
+  B5:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 865
+        band_width: 28
+        resolution: 30
+        descriptive_name: 'NIR'
+
+  B6:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 1609
+        band_width:  85
+        resolution: 30
+        descriptive_name: 'SWIR1'
+
+  B7:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 2201
+        band_width: 173
+        resolution: 30
+        descriptive_name: 'SWIR2'
+
+  B8:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 590
+        band_width: 187
+        resolution: 15
+        descriptive_name: 'Panchromatic'
+
+  B9:
+        type: TOA Reflectance
+        gain: 0.0002
+        offset: -0.1
+        solar_correction: True
+        band_centre: 1374
+        band_width: 21
+        resolution: 30
+        descriptive_name: 'Cirrus'
+
+  B10:
+        type: TOA Normalised Brightness Temperature
+        gain:  0.0003342
+        offset: 0.1
+        K1: 774.89
+        K2: 1321.08
+        MINIMUM_BT: 132 # Calculated as BT at DN=0, will become 0
+        MAXIMUM_BT: 249 # Calculated as BT at 95th percentile of DN's in Biome dataset (30856), will become 1
+        band_centre: 10895
+        band_width: 590
+        resolution: 30
+        descriptive_name: 'TIR1'
+
+  B11:
+        type: TOA Normalised Brightness Temperature
+        gain:  0.0003342
+        offset: 0.1
+        K1: 480.89
+        K2:  1201.14
+        MINIMUM_BT: 127 # Calculated as BT at DN=0, will become 0
+        MAXIMUM_BT: 239 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
+        band_centre: 12005
+        band_width: 1010
+        resolution: 30
+        descriptive_name: 'TIR2'
+
+
+band_files:
+  _B1.TIF: 'B1'
+  _B2.TIF: 'B2'
+  _B3.TIF: 'B3'
+  _B4.TIF: 'B4'
+  _B5.TIF: 'B5'
+  _B6.TIF: 'B6'
+  _B7.TIF: 'B7'
+  _B8.TIF: 'B8'
+  _B9.TIF: 'B9'
+  _B10.TIF: 'B10'
+  _B11.TIF: 'B11'
+
+mask:
+  mask_file: _fixedmask.hdr
+  classes:
+      FILL: 0
+      SHADOW: 64
+      CLEAR: 128
+      THIN: 192
+      THICK: 255
+  resolution: 30
+...

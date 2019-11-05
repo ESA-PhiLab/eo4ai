@@ -1,0 +1,151 @@
+---
+spacecraft_id: Landsat7
+bands:
+  B1:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND1
+        QCAL_MIN: QCALMIN_BAND1
+        L_MAX: LMAX_BAND1
+        L_MIN: LMIN_BAND1
+        ESUN: 1970.
+        solar_correction: True
+        band_centre: 491
+        band_width: 73
+        resolution: 30
+        descriptive_name: 'Blue'
+
+  B2:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND2
+        QCAL_MIN: QCALMIN_BAND2
+        L_MAX: LMAX_BAND2
+        L_MIN: LMIN_BAND2
+        ESUN: 1842.
+        solar_correction: True
+        band_centre: 560
+        band_width: 82
+        resolution: 30
+        descriptive_name: 'Green'
+
+  B3:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND3
+        QCAL_MIN: QCALMIN_BAND3
+        L_MAX: LMAX_BAND3
+        L_MIN: LMIN_BAND3
+        ESUN: 1547.
+        solar_correction: True
+        band_centre: 662
+        band_width: 61
+        resolution: 30
+        descriptive_name: 'Red'
+
+  B4:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND4
+        QCAL_MIN: QCALMIN_BAND4
+        L_MAX: LMAX_BAND4
+        L_MIN: LMIN_BAND4
+        ESUN: 1044.
+        solar_correction: True
+        band_centre: 835
+        band_width: 126
+        resolution: 30
+        descriptive_name: 'NIR'
+
+  B5:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND5
+        QCAL_MIN: QCALMIN_BAND5
+        L_MAX: LMAX_BAND5
+        L_MIN: LMIN_BAND5
+        ESUN: 225.7
+        solar_correction: True
+        band_centre: 1648
+        band_width: 202
+        resolution: 30
+        descriptive_name: 'SWIR1'
+
+  B61:
+        type: TOA Normalised Brightness Temperature
+        QCAL_MAX: QCALMAX_BAND61
+        QCAL_MIN: QCALMIN_BAND61
+        L_MAX: LMAX_BAND61
+        L_MIN: LMIN_BAND61
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
+        band_centre: 11335
+        band_width:  2050
+        resolution: 60
+        descriptive_name: 'TIR1'
+
+  B62:
+        type: TOA Normalised Brightness Temperature
+        QCAL_MAX: QCALMAX_BAND62
+        QCAL_MIN: QCALMIN_BAND62
+        L_MAX: LMAX_BAND62
+        L_MIN: LMIN_BAND62
+        K1: 666.09
+        K2:  1282.71
+        MINIMUM_BT: 169 # Calculated as BT at DN=1, will become 0
+        MAXIMUM_BT: 252 # Calculated as BT at 95th percentile of DN's in Biome dataset (25259), will become 1
+        band_centre: 11335
+        band_width:  2050
+        resolution: 60
+        descriptive_name: 'TIR2'
+
+  B7:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND7
+        QCAL_MIN: QCALMIN_BAND7
+        L_MAX: LMAX_BAND7
+        L_MIN: LMIN_BAND7
+        ESUN: 82.06
+        solar_correction: True
+        band_centre: 2205
+        band_width: 281
+        resolution: 30
+        descriptive_name: 'SWIR2'
+
+  B8:
+        type: TOA Reflectance
+        QCAL_MAX: QCALMAX_BAND8
+        QCAL_MIN: QCALMIN_BAND8
+        L_MAX: LMAX_BAND8
+        L_MIN: LMIN_BAND8
+        ESUN: 1369.
+        solar_correction: True
+        band_centre: 705
+        band_width: 381
+        resolution: 15
+        descriptive_name: 'Panchromatic'
+
+band_files:
+  _B10.TIF: 'B1'
+  _B20.TIF: 'B2'
+  _B30.TIF: 'B3'
+  _B40.TIF: 'B4'
+  _B50.TIF: 'B5'
+  _B61.TIF: 'B61'
+  _B62.TIF: 'B62'
+  _B70.TIF: 'B7'
+  _B80.TIF: 'B8'
+
+mask:
+  mask_file: _mask
+  classes:
+    shadow present:
+      FILL: no_data
+      SHADOW: 0
+      CLEAR: [255, '~no_data']
+      THIN CLOUD: 192
+      THICK CLOUD: 128
+    else:
+      FILL: 0
+      CLEAR: 128
+      THIN CLOUD: 192
+      THICK CLOUD: 255
+  resolution: 30
+...
