@@ -374,8 +374,11 @@ class BandRegisterFinder:
             substrings = [substrings]
 
         band_file_register={}
-        for band_file_substring,band_file_ids in self.dataset_metadata['band_files'].items():
-            path = self.filefinder(band_file_substring+substrings,startswith=startswith,endswith=endswith,dir_substrings=dir_substrings)
+        for band_file_substrings,band_file_ids in self.dataset_metadata['band_files'].items():
+            if isinstance(band_file_substrings,str):
+                band_file_substrings = [band_file_substrings]
+
+            path = self.filefinder(band_file_substrings+substrings,startswith=startswith,endswith=endswith,dir_substrings=dir_substrings)
             band_file_register[path] = [band_file_ids]
 
         return band_file_register
