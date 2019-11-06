@@ -6,7 +6,7 @@ import cv2
 import skimage.io
 import json
 import spectral as spy
-
+import glymur
 
 #---ENCODERS---
 
@@ -311,17 +311,22 @@ class FileFinderBySubStrings:
             dir_substrings = [dir_substrings]
 
         found_paths = []
+        print(substrings)
+        print(dir_substrings)
         for root,dirs,paths in os.walk(self.root_path):
+
             for possible_path in paths:
                 if startswith is not None:
                     if not possible_path.startswith(startswith):
+                        print(1)
                         continue
                 if endswith is not None:
                     if not possible_path.endswith(endswith):
+                        print(2)
                         continue
                 if dir_substrings is not None:
                     if not all(substring in root for substring in dir_substrings):
-                            continue
+                        continue
                 if all(substring in possible_path for substring in substrings):
                     possible_path = os.path.join(root,possible_path)
                     found_paths.append(possible_path)
@@ -423,7 +428,11 @@ class MultiFileBandLoader:
         if selected_band_ids is not None:
             band_file_register = dict([item for item in band_file_register.items() if any([band in item[1] for band in selected_band_ids])])
         for band_file,file_band_ids in band_file_register.items():
-            file_data = self.imread(band_file)
+            if isinstance(self.imread,str):
+                file_data = eval(self.imread.format(band_file))
+            else:
+                file_data = self.imread(band_file)
+
             if file_data.ndim==2:
                 file_bands = [file_data]
             else:
@@ -476,7 +485,10 @@ class SingleFileBandLoader:
 
         """
         band_ids = self.dataset_metadata['band_files'][file_id]
-        bands = self.imread(path)
+        if isinstance(self.imread,str):
+            bands = eval(self.imread.format(path))
+        else:
+            bands = self.imread(path)
         if selected_band_ids is None:
             # convert to list
             bands = [bands[...,i] for i in range(bands.shape[-1])]
@@ -556,6 +568,38 @@ class SimpleSpectralDescriptorsLoader:
         return descriptors
 
 class LandsatMTLLoader:
+    """Loader for Landsat metadata files, into non-hierarchical dictionary."""
+    def __init__(self):
+        pass
+
+    def __call__(self,path):
+        """Loads metadata values from a given path to Landsat metadata file.
+
+        Parameters
+        ----------
+        path : str
+            Path to Landsat metadata file.
+
+        Returns
+        -------
+        config : dict
+            Dictionary containing all values from Landsat metadata file (non-hierarchical).
+        """
+        with open(path) as f:
+            config =  {
+                entry[0]: entry[1]
+                for entry in map(lambda l: "".join(l.split()).split('='), f)
+                if len(entry) == 2
+            }
+        for k,v in config.items():
+            try:
+                config[k] = float(v)
+            except:
+                continue
+        return config
+
+
+class Sentinel2MTLLoader:
     """Loader for Landsat metadata files, into non-hierarchical dictionary."""
     def __init__(self):
         pass
@@ -970,19 +1014,19 @@ class LandsatMetadataWriter:
         self.dataset_metadata = dataset_metadata
         self.sun_elevation = sun_elevation
 
-    def __call__(self,scene_metadata,scene_id,band_ids,class_ids,**kwargs):
+    def __call__(self,scene_id,band_ids,class_ids,scene_metadata=None,**kwargs):
         """Create dictionary for all relevant metadata values for a Landsat scene.
 
         Parameters
         ----------
-        scene_metadata : dict
-            Scene-specific Landsat metadata values.
         scene_id : str
             Identifier for scene.
         band_ids : list
             Identifiers for bands.
         class_ids : list
             Identifiers for classes.
+        scene_metadata : dict, optional
+            Scene-specific Landsat metadata values, only needed if sun_elevation=True
         **kwargs
             All other (name, value) pairs to be saved
 

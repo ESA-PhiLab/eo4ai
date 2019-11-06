@@ -154,7 +154,7 @@ class L8Biome96(Dataset):
         self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
         self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
-        self.maskloader = utils.ImageLoader(imread='np.squeeze(spy.open_image("{}").load())')
+        self.maskloader = utils.ImageLoader(imread=self._mask_imread)
         self.metadataloader = utils.LandsatMTLLoader()
         self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
         self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
@@ -166,6 +166,11 @@ class L8Biome96(Dataset):
         self.outputorganiser = utils.BySceneAndPatchOrganiser()
         self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
         self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+
+    @staticmethod
+    def _mask_imread(filename):
+        return np.squeeze(spy.open_image(filename).load()
+
     def get_scenes(self):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
@@ -266,10 +271,64 @@ class L7Irish206(Dataset):
         #Save metadata
         self.metadatasaver(self.output_metadata,output_paths)
 
-class S2CESBIO(Dataset):
+class S2CESBIO38(Dataset):
     def __init__(self, **kwargs):
-        pass
+        super().__init__(dataset_id='S2CESBIO38', **kwargs)
+        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
+        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread='glymur.Jp2k("{}")[:]')
+        self.maskloader = utils.ImageLoader(imread=tif.imread)
+        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
+        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=False)
+        self.outputorganiser = utils.BySceneAndPatchOrganiser()
+        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
 
+    @staticmethod
+    def _mask_imread(filename):
+        return np.squeeze(spy.open_image(filename).load()
+        
+    def get_scenes(self):
+        scenes = []
+        for root,dirs,paths in os.walk(self.in_path):
+            if any(['classification_map' in path for path in paths]):
+                scenes.append(root.replace(self.in_path+os.sep,''))
+        pprint.pprint(scenes)
+        return scenes
+
+    def process_scene(self,scene_id):
+        #Find scene's files
+        band_file_register = self.bandregisterfinder(dir_substrings=[scene_id])
+        mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],dir_substrings=scene_id)
+        #Load bands, mask and metadata
+        bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
+        mask = self.maskloader(mask_file)
+        #Normalise band values
+        bands = self.normaliser(bands,band_ids,None)
+
+        #Encode mask
+        mask,class_ids = self.encoder(mask)
+
+        #Resize bands and mask
+        bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
+
+        #Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
+
+        #get output_metadata
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,resolution=self.resolution)
+        #Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
+        #Save data
+        self.datasaver(band_patches,mask_patches,self.descriptors,output_paths)
+
+        #Save metadata
+        self.metadatasaver(self.output_metadata,output_paths)
 
 if __name__ == '__main__':
     import shutil
@@ -278,7 +337,7 @@ if __name__ == '__main__':
         'L8Biome96': L8Biome96,
         'L8SPARCS80': L8SPARCS80,
         'L7Irish206': L7Irish206,
-        'S2CESBIO': S2CESBIO
+        'S2CESBIO38': S2CESBIO38
     }
 
     arg_parser = argparse.ArgumentParser(
