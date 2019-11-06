@@ -22,6 +22,7 @@ from os.path import join, dirname, abspath, split
 import ast
 from skimage import transform
 from skimage.io import imread
+import glymur
 import json
 
 import utils
@@ -67,7 +68,7 @@ class Dataset(ABC):
         with ThreadPoolExecutor(self.jobs) as pool:
             pool.map(self.process_scene, scenes)
         # for scene in scenes:
-        #     self.process_scene(scene)
+            # self.process_scene(scene)
         #self.dump_README() # TODO
 
     def dump_README(self):
