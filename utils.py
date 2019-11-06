@@ -311,18 +311,14 @@ class FileFinderBySubStrings:
             dir_substrings = [dir_substrings]
 
         found_paths = []
-        print(substrings)
-        print(dir_substrings)
         for root,dirs,paths in os.walk(self.root_path):
 
             for possible_path in paths:
                 if startswith is not None:
                     if not possible_path.startswith(startswith):
-                        print(1)
                         continue
                 if endswith is not None:
                     if not possible_path.endswith(endswith):
-                        print(2)
                         continue
                 if dir_substrings is not None:
                     if not all(substring in root for substring in dir_substrings):
