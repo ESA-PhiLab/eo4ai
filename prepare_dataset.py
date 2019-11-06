@@ -276,7 +276,7 @@ class S2CESBIO38(Dataset):
         super().__init__(dataset_id='S2CESBIO38', **kwargs)
         self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
-        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread='glymur.Jp2k("{}")[:]')
+        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=self._band_imread)
         self.maskloader = utils.ImageLoader(imread=tif.imread)
         self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
         self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
@@ -289,6 +289,9 @@ class S2CESBIO38(Dataset):
         self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
         self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
 
+    @staticmethod
+    def _band_imread(filename):
+        return glymur.Jp2k(filename)[:]
 
     def get_scenes(self):
         scenes = []
