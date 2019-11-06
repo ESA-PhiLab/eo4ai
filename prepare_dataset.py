@@ -65,10 +65,10 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        # with ThreadPoolExecutor(self.jobs) as pool:
-            # pool.map(self.process_scene, scenes)
-        for scene in scenes:
-            self.process_scene(scene)
+        with ThreadPoolExecutor(self.jobs) as pool:
+            pool.map(self.process_scene, scenes)
+        # for scene in scenes:
+            # self.process_scene(scene)
         #self.dump_README() # TODO
 
     def dump_README(self):
