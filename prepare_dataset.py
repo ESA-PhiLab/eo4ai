@@ -65,10 +65,10 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        # with ThreadPoolExecutor(self.jobs) as pool:
-        #     pool.map(self.process_scene, scenes)
-        for scene in scenes:
-            self.process_scene(scene)
+        with ThreadPoolExecutor(self.jobs) as pool:
+            pool.map(self.process_scene, scenes)
+        # for scene in scenes:
+        #     self.process_scene(scene)
         self.dump_README() # TODO
 
     def dump_README(self):
@@ -292,7 +292,7 @@ class S2CESBIO38(Dataset):
     @staticmethod
     def _mask_imread(filename):
         return np.squeeze(spy.open_image(filename).load()
-        
+
     def get_scenes(self):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
@@ -395,6 +395,3 @@ if __name__ == '__main__':
         **kwargs
     )
     dataset.process()
-
-
-#RUN ME: python prepare_dataset.py  D:\Datasets\clouds\SPARCS_raw .\test_out -d TEST -o True -r 30 -p 256 -g True
