@@ -65,10 +65,10 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        with ThreadPoolExecutor(self.jobs) as pool:
-            pool.map(self.process_scene, scenes)
-        # for scene in scenes:
-            # self.process_scene(scene)
+        # with ThreadPoolExecutor(self.jobs) as pool:
+            # pool.map(self.process_scene, scenes)
+        for scene in scenes:
+            self.process_scene(scene)
         #self.dump_README() # TODO
 
     def dump_README(self):
@@ -137,7 +137,7 @@ class L8SPARCS80(Dataset):
         band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
         #get output_metadata
-        self.output_metadata = self.outputmetadatawriter(self.scene_metadata,scene_id,band_ids,class_ids,resolution=self.resolution)
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
         #Get directories for outputs
         output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
 
@@ -200,7 +200,7 @@ class L8Biome96(Dataset):
         band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
         #get output_metadata
-        self.output_metadata = self.outputmetadatawriter(self.scene_metadata,scene_id,band_ids,class_ids,resolution=self.resolution)
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
         #Get directories for outputs
         output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
         #Save data
@@ -260,7 +260,7 @@ class L7Irish206(Dataset):
         band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
         #get output_metadata
-        self.output_metadata = self.outputmetadatawriter(self.scene_metadata,scene_id,band_ids,class_ids,resolution=self.resolution)
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
         #Get directories for outputs
         output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
         #Save data
