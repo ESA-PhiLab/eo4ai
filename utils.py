@@ -5,7 +5,6 @@ import math
 import cv2
 import skimage.io
 import json
-import pprint
 import spectral as spy
 
 
@@ -116,7 +115,6 @@ class L7IrishEncoder(Encoder):
         for b in bands:
             if np.all(b.shape == mask.shape):
                 no_data += b==0
-        print(no_data.mean())
         encoded_mask = np.empty((*mask.shape[:2],5))
         if mask[0,0] == 0:
             # Class and pixel value:
@@ -863,7 +861,6 @@ class ImageMaskDescriptorNumpySaver(ImageMaskNumpySaver):
         for item in zip(images,masks,descriptors,out_paths):
             self._save_sample(*item)
     def _save_sample(self,image,mask,descriptors,out_path):
-        print(os.path.split(out_path)[1])
         super()._save_sample(image,mask,out_path)
         descriptors_path = os.path.join(out_path,'descriptors.npy')
         if not self.overwrite:
