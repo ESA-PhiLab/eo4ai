@@ -980,7 +980,7 @@ class SlidingWindowSplitter:
                 num_valid_patches+=1
 
         bands_patches = [bands_patches[i,...] for i in range(num_valid_patches)]
-        mask_patches = [mask_patches[i,...] for i in range(num_valid_patches)]
+        mask_patches = [mask_patches[i,...].astype(bool) for i in range(num_valid_patches)]
 
         return bands_patches,mask_patches, patch_ids
 
