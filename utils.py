@@ -11,116 +11,238 @@ import spectral as spy
 
 #---ENCODERS---
 
-class MapByColourEncoder:
-    def __init__(self,dataset_metadata):
-        self.dataset_metadata = dataset_metadata
-        self.classes = self.dataset_metadata['mask']['classes']
-        self.class_ids,self.colours = zip(*self.classes.items())
+class Encoder(ABC):
+    """Abstract Base Class for Encoders.
 
-    def __call__(self,mask):
-        #Match each colour in self.classes with pixels in mask
-        encoded_mask = np.stack([np.all(mask[:,:]==colour,axis=-1) for colour in self.colours],axis=-1)
-        return encoded_mask,self.class_ids
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    classes : dict
+        Class/value pairs for dataset annotations.
+    class_ids : list
+        Class names for dataset annotations.
+    patterns : list
+        Numerical values in the mask that correspond to the class_ids.
 
-
-class MapByValueEncoder:
-    def __init__(self,dataset_metadata):
-        self.dataset_metadata = dataset_metadata
-        self.classes = self.dataset_metadata['mask']['classes']
-        self.class_ids,self.values = zip(*self.classes.items())
-
-
-    def __call__(self,mask):
-        encoded_mask = np.stack([mask[:,:]==value for value in self.values],axis=-1)
-        return encoded_mask,self.class_ids
-
-class L7IrishEncoder:
+    Methods
+    -------
+    __call__(*args,**kwargs)
+        Abstract method that should encode the mask somehow when implemented.
     """
-    Will be removed if/when USGS fixes issues with Irish dataset masks
+    def __init__(self,dataset_metadata):
+        self.dataset_metadata = dataset_metadata
+        self.classes = self.dataset_metadata['mask']['classes']
+        self.class_ids,self.patterns = zip(*self.classes.items())
+
+    @abstractmethod
+    def __call__(self,*args,**kwargs):
+        pass
+
+class MapByColourEncoder(Encoder):
+    """Encoder used to map 3D arrays into one-hot encoded arrays by matching colours."""
+    def __call__(self,mask):
+        """Encodes the mask by the colour of a given pixel into one-hot array.
+
+        Parameters
+        ----------
+        mask : np.ndarray
+            2D array of original labelled values for a scene.
+
+        Returns
+        -------
+        encoded_mask : np.ndarray, bool
+            One-hot encoded array corresponding to classes.
+        class_ids : list
+            Class names corresponding to position on final axis of encoded_mask.
+        """
+        #Match each colour in self.classes with pixels in mask
+        encoded_mask = np.stack([np.all(mask[:,:]==colour,axis=-1) for colour in self.patterns],axis=-1).astype(np.bool)
+        return encoded_mask,self.class_ids
+
+
+class MapByValueEncoder(Encoder):
+    """Encoder used to map 2D arrays into one-hot encoded arrays by matching values."""
+    def __call__(self,mask):
+        """Encodes the mask by the value of a given pixel into one-hot array.
+
+        Parameters
+        ----------
+        mask : np.ndarray
+            2D array of original labelled values for a scene.
+
+        Returns
+        -------
+        encoded_mask : np.ndarray, bool
+            One-hot encoded array corresponding to classes.
+        class_ids : list
+            Class names corresponding to position on final axis of encoded_mask.
+        """
+        encoded_mask = np.stack([mask[:,:]==value for value in self.patterns],axis=-1).astype(np.bool)
+        return encoded_mask,self.class_ids
+
+class L7IrishEncoder(Encoder):
+    """
+    Will be removed if/when USGS fixes issues with Irish dataset masks.
+
+    Methods
+    -------
+    __call__(mask)
+        Encodes the mask based on specific requirements of Landsat 7 Irish dataset.
+
     """
     def __init__(self,dataset_metadata):
         self.dataset_metadata = dataset_metadata
         self.class_ids = ['FILL','SHADOW','CLEAR','THIN','THICK']
 
     def __call__(self,mask,bands):
+        """Encodes the mask based on specific requirements of Landsat 7 Irish dataset.
+
+        Parameters
+        ----------
+        mask : np.ndarray
+            2D array of original labelled values for a scene.
+        bands : list
+            List of band arrays for a scene.
+
+        Returns
+        -------
+        encoded_mask : np.ndarray, bool
+            One-hot encoded array corresponding to classes.
+        class_ids : list
+            Class names corresponding to position on final axis of encoded_mask.
+        """
         no_data = np.zeros(mask.shape[:2],dtype=bool)
         for b in bands:
             if np.all(b.shape == mask.shape):
                 no_data += b==0
         print(no_data.mean())
-        new_mask = np.empty((*mask.shape[:2],5))
+        encoded_mask = np.empty((*mask.shape[:2],5))
         if mask[0,0] == 0:
             # Class and pixel value:
-            new_mask[..., 0] = no_data  # FILL (no data)
-            new_mask[..., 1] = False      # SHADOW (there is no shadow class defined)
-            new_mask[..., 2] = mask == 128  # CLEAR
-            new_mask[..., 3] = mask == 192  # THIN
-            new_mask[..., 4] = mask == 255  # THICK
+            encoded_mask[..., 0] = no_data  # FILL (no data)
+            encoded_mask[..., 1] = False      # SHADOW (there is no shadow class defined)
+            encoded_mask[..., 2] = mask == 128  # CLEAR
+            encoded_mask[..., 3] = mask == 192  # THIN
+            encoded_mask[..., 4] = mask == 255  # THICK
         else:
             # Pixel values for FILL and CLEAR are ambiguous. So we have to check whether
             # there is actual data in other bands:
-            new_mask[..., 0] = no_data    # FILL (no data)
-            new_mask[..., 1] = mask == 0  # SHADOW
-            new_mask[..., 2] = (mask == 255) & ~no_data  # CLEAR
-            new_mask[..., 3] = mask == 192  # THIN
-            new_mask[..., 4] = mask == 128  # THICK
+            encoded_mask[..., 0] = no_data    # FILL (no data)
+            encoded_mask[..., 1] = mask == 0  # SHADOW
+            encoded_mask[..., 2] = (mask == 255) & ~no_data  # CLEAR
+            encoded_mask[..., 3] = mask == 192  # THIN
+            encoded_mask[..., 4] = mask == 128  # THICK
 
 
-        return new_mask,self.class_ids
+        return encoded_mask.astype(np.bool),self.class_ids
 
 
 #---FILTERS---
 
-class NoDataFilterByBands:
+class FilterByBandValue:
+    """Patch filter that disallows based on presence of a given value in the bands.
 
-    def __init__(self, no_data_value=None, mode='all',threshold=None):
-        self.no_data_value = no_data_value
-        if self.no_data_value is None:
-            self.no_data_value = 0
+    Attributes
+    ----------
+    target_value
+        Value in bands by which filtering occurs.
+    mode : str
+        Controller for which multiband_func to use, can be 'all' or 'any'.
+    threshold : float
+        Maximum allowable amount of target class between 0 and 1.
+    multiband_func : func
+        Function that decides whether pixel is counted based on multiple bands.
+    """
+    def __init__(self, target_value=None, mode='all',threshold=None):
+        self.target_value = target_value
+        if self.target_value is None:
+            self.target_value = 0
 
         self.mode = mode
         if self.mode not in ['all','any']:
             raise ValueError('Invalid mode - "{}"'.format(self.mode))
 
         if self.mode=='all':
-            self.no_data_func = np.all
+            self.multiband_func = np.all
         elif self.mode=='any':
-            self.no_data_func = np.any
+            self.multiband_func = np.any
 
         self.threshold = threshold
         if self.threshold is None:
             self.threshold = 0
 
-
     def __call__(self, bands, mask):
+        """Calculate whether patch passes filter based on class in mask.
 
-        no_data = self.no_data_func(bands==self.no_data_value, axis=-1)
-        if np.mean(no_data)>self.threshold:
+        Parameters
+        ----------
+        bands : np.ndarray
+            Array of band values.
+        mask : np.ndarray
+            One-hot encoded array corresponding to classes.
+
+        Returns
+        -------
+        bool
+            True if patch has passed filter, False otherwise.
+        """
+        is_target = self.multiband_func(bands==self.target_value, axis=-1)
+        if np.mean(is_target)>self.threshold:
             return False #Patch has failed
 
         return True #Patch has passed
 
-class NoDataFilterByMask:
+class FilterByMaskClass:
+    """Patch filter that disallows based on presence of a given class in the mask.
 
-    def __init__(self, no_data_index = None, threshold = None):
-        self.no_data_index = no_data_index
+    Attributes
+    ----------
+    target_index
+        Index in mask by which filtering occurs (last dimension of mask).
+    threshold : float
+        Maximum allowable amount of target class between 0 and 1.
+    """
+    def __init__(self, target_index = None, threshold = None):
+        self.target_index = target_index
         self.threshold = threshold
         if self.threshold is None:
             self.threshold = 0
     def __call__(self, bands, mask):
+        """Calculate whether patch passes filter based on class in mask.
 
-        if self.no_data_index is not None:  #Use specific class as no_data mask
-            no_data = mask[...,self.no_data_index]
+        Parameters
+        ----------
+        bands : np.ndarray
+            Array of band values.
+        mask : np.ndarray
+            One-hot encoded array corresponding to classes.
+
+        Returns
+        -------
+        bool
+            True if patch has passed filter, False otherwise.
+        """
+        if self.target_index is not None:  #Use specific class as no_data mask
+            is_target = mask[...,self.target_index]
         else:   #Use places for which there are no labels as no_data
-            no_data = np.all(mask==0, axis=-1)
+            is_target = np.all(mask==0, axis=-1)
 
-        if np.mean(no_data)>self.threshold:
+        if np.mean(is_target)>self.threshold:
             return False #Patch has failed
 
         return True #Patch has passed
 
-class SaturationFilter:
+class FilterBySaturation:
+    """Patch filter that disallows based on presence of saturation in bands.
 
+    Attributes
+    ----------
+    saturation_value :
+        Index in mask by which filtering occurs (last dimension of mask).
+    threshold : float
+        Maximum allowable amount of target class between 0 and 1.
+    """
     def __init__(self, saturation_value = None, threshold = None):
         self.saturation_value = saturation_value
         self.threshold = threshold
@@ -128,7 +250,20 @@ class SaturationFilter:
             self.threshold = 0
 
     def __call__(self, bands, mask):
+        """Calculate whether patch passes filter based on saturation in bands.
 
+        Parameters
+        ----------
+        bands : np.ndarray
+            Array of band values.
+        mask : np.ndarray, bool
+            One-hot encoded array corresponding to classes.
+
+        Returns
+        -------
+        bool
+            True if patch has passed filter, False otherwise.
+        """
         if self.saturation_value is not None:
             saturated = bands >= self.saturation_value
         else:
@@ -143,13 +278,40 @@ class SaturationFilter:
 #---FINDERS---
 
 class FileFinderBySubStrings:
+    """File finder for individual files based on substrings.
 
+    Attributes
+    ----------
+    root_path : str
+        Path to directory that will be searched within.
+    """
     def __init__(self, root_path):
         self.root_path = root_path
 
-    def __call__(self,substrings,startswith=None,endswith=None,in_dir=None):
+    def __call__(self,substrings,startswith=None,endswith=None,dir_substrings=None):
+        """Finds unique file based on substrings and other conditions.
+
+        Parameters
+        ----------
+        substrings : list or str
+            All strings that file must contain---not including directories or self.root_path.
+        startswith : str, optional
+            String that file must start with---not including directories or self.root_path (default is None).
+        endswith : str, optional
+            String that file must end with (default is None).
+        dir_substrings : list or str, optional
+            All strings that the directory-tree of file must contain (default is None).
+
+        Returns
+        -------
+        str
+            Path to unique file meeting conditions.
+        """
         if isinstance(substrings,str):
             substrings = [substrings]
+        if isinstance(dir_substrings,str):
+            dir_substrings = [dir_substrings]
+
         found_paths = []
         for root,dirs,paths in os.walk(self.root_path):
             for possible_path in paths:
@@ -159,9 +321,9 @@ class FileFinderBySubStrings:
                 if endswith is not None:
                     if not possible_path.endswith(endswith):
                         continue
-                if in_dir is not None:
-                    if in_dir not in root:
-                        continue
+                if dir_substrings is not None:
+                    if not all(substring in root for substring in dir_substrings):
+                            continue
                 if all(substring in possible_path for substring in substrings):
                     possible_path = os.path.join(root,possible_path)
                     found_paths.append(possible_path)
@@ -173,23 +335,64 @@ class FileFinderBySubStrings:
         return found_paths[0]
 
 class BandRegisterFinder:
+    """File finder for multiple files based on substrings.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    root_path : str
+        Path to directory that will be searched within.
+    filefinder : FileFinderBySubStrings
+        Finder for single files used to construct register.
+    """
     def __init__(self, dataset_metadata,root_path):
         self.dataset_metadata = dataset_metadata
         self.root_path = root_path
         self.filefinder = FileFinderBySubStrings(self.root_path)
 
-    def __call__(self,substrings=None,startswith=None,endswith=None,in_dir=None):
+    def __call__(self,substrings='',startswith=None,endswith=None,dir_substrings=None):
+        """Finds required files based on dataset_metadata, substrings, and other conditions.
+
+        Parameters
+        ----------
+        substrings : list or str, optional
+            All strings that all files must contain---not including directories or self.root_path (default is '').
+        startswith : str, optional
+            String that all files must start with---not including directories or self.root_path (default is None).
+        endswith : str, optional
+            String that all files must end with (default is None).
+        dir_substrings : list or str, optional
+            All strings that the directory-tree of all files must contain (default is None).
+
+        Returns
+        -------
+        band_file_register : dict
+            Dictionary mapping paths to the band data they contain as lists of band_ids.
+        """
+        if isinstance(substrings,str):
+            substrings = [substrings]
+
         band_file_register={}
         for band_file_substring,band_file_ids in self.dataset_metadata['band_files'].items():
-            path = self.filefinder(band_file_substring,startswith=startswith,endswith=endswith,in_dir=in_dir)
+            path = self.filefinder(band_file_substring+substrings,startswith=startswith,endswith=endswith,dir_substrings=dir_substrings)
             band_file_register[path] = [band_file_ids]
-        pprint.pprint(band_file_register)
+
         return band_file_register
 
 
 #---LOADERS---
 
-class MultiImageBandLoader:
+class MultiFileBandLoader:
+    """Loader for band data when contained in multiple files.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    imread : func or str
+        Function or evaluatable string that reads some image file.
+    """
     def __init__(self,dataset_metadata,imread=None):
         self.dataset_metadata = dataset_metadata
         if imread is None:
@@ -198,7 +401,22 @@ class MultiImageBandLoader:
             self.imread = imread
 
     def __call__(self,band_file_register,selected_band_ids=None):
+        """Loads all required band files
 
+        Parameters
+        ----------
+        band_file_register : dict
+            Dictionary mapping paths to the band data they contain as lists of band_ids.
+        selected_band_ids : list, optional
+            List of band_ids to load (default is None).
+
+        Returns
+        -------
+        bands : list
+            All loaded bands.
+        band_ids : list
+            Band ids corresponding order to loaded bands.
+        """
         band_ids = []
         bands = []
         if selected_band_ids is not None:
@@ -219,7 +437,16 @@ class MultiImageBandLoader:
             bands = [band for i,band in enumerate(bands) if i in selected_idxs]
             return bands, selected_band_ids
 
-class SingleImageBandLoader:
+class SingleFileBandLoader:
+    """Loader for band data when contained in single file.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    imread : func or str
+        Function or evaluatable string that reads some image file.
+    """
     def __init__(self,dataset_metadata,imread=None):
         self.dataset_metadata = dataset_metadata
         if imread is None:
@@ -228,6 +455,25 @@ class SingleImageBandLoader:
             self.imread = imread
 
     def __call__(self,path,file_id,selected_band_ids=None):
+        """Loads band data from file and then selects bands.
+
+        Parameters
+        ----------
+        path : str
+            Path to band data file
+        file_id : str
+            Identifier corresponding to file in question in dataset_metadata
+        selected_band_ids : list, optional
+            List of band_ids to keep once loaded (default is None).
+
+        Returns
+        -------
+        bands : list
+            All loaded bands.
+        band_ids : list
+            Band ids corresponding order to loaded bands.
+
+        """
         band_ids = self.dataset_metadata['band_files'][file_id]
         bands = self.imread(path)
         if selected_band_ids is None:
@@ -242,7 +488,13 @@ class SingleImageBandLoader:
             return bands, selected_band_ids
 
 class ImageLoader:
+    """Loader for single images.
 
+    Attributes
+    ----------
+    imread : func or str
+        Function or evaluatable string that reads some image file.
+    """
     def __init__(self,imread=None):
         if imread is None:
             self.imread = skimage.io.imread
@@ -250,22 +502,51 @@ class ImageLoader:
             self.imread = imread
 
     def __call__(self,path):
+        """Loads image from file.
+
+        Parameters
+        ----------
+        path : str
+            Path to image file.
+
+        Returns
+        -------
+        np.ndarray
+            Image data loaded from path.
+        """
         if isinstance(self.imread,str):
             return eval(self.imread.format(path))
         return self.imread(path)
 
 class SimpleSpectralDescriptorsLoader:
+    """Loader for simple spectral descriptors.
 
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    """
     def __init__(self,dataset_metadata):
         self.dataset_metadata = dataset_metadata
 
-    def __call__(self,bands=None):
+    def __call__(self,band_ids=None):
+        """Calculates simple spectral descriptors for the given bands.
 
-        if bands is None:
-            bands = list(self.dataset_metadata['bands'].keys())
+        Parameters
+        ----------
+        band_ids : list, optional
+            Identifiers for bands for which descriptors should be calculated
+
+        Returns
+        -------
+        descriptors : np.ndarray
+            Triplets of values for each band (min. wavelen, centre wavelen, max. wavelen).
+        """
+        if band_ids is None:
+            band_ids = list(self.dataset_metadata['bands'].keys())
 
         descriptors = []
-        for band in bands:
+        for band in band_ids:
             band_centre = self.dataset_metadata['bands'][band]['band_centre']
             band_width = self.dataset_metadata['bands'][band]['band_width']
             descriptors.append([band_centre-band_width/2,band_centre,band_centre+band_width/2])
@@ -274,10 +555,23 @@ class SimpleSpectralDescriptorsLoader:
         return descriptors
 
 class LandsatMTLLoader:
+    """Loader for Landsat metadata files, into non-hierarchical dictionary."""
     def __init__(self):
         pass
 
     def __call__(self,path):
+        """Loads metadata values from a given path to Landsat metadata file.
+
+        Parameters
+        ----------
+        path : str
+            Path to Landsat metadata file.
+
+        Returns
+        -------
+        config : dict
+            Dictionary containing all values from Landsat metadata file (non-hierarchical).
+        """
         with open(path) as f:
             config =  {
                 entry[0]: entry[1]
@@ -295,11 +589,41 @@ class LandsatMTLLoader:
 #---NORMALISERS---
 
 class LandsatNormaliser(ABC):
+    """Abstract Base Class for Landsat Normalisers.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    scene_metadata : dict or None
+        Scene-specific Landsat metadata values.
+
+    Methods
+    -------
+    _normalise_band(band,band_id,scene_metadata)
+        Abstract method which should normalise a band when implemented.
+    """
     def __init__(self,dataset_metadata):
         self.dataset_metadata = dataset_metadata
         self.scene_metadata = None
 
     def __call__(self,bands,band_ids,scene_metadata):
+        """Normalises all bands based on metadata.
+
+        Parameters
+        ----------
+        bands : list
+            Band data from a Landsat scene.
+        band_ids : list
+            Identifiers for bands.
+        scene_metadata : dict
+            Scene-specific Landsat metadata values.
+
+        Returns
+        -------
+        bands : list
+            Normalised band data from a Landsat scene.
+        """
         self.scene_metadata = scene_metadata
         if isinstance(band_ids,str): #Single-Band mode
             band_ids = [band_ids]
@@ -312,9 +636,24 @@ class LandsatNormaliser(ABC):
         pass
 
 class Landsat8Normaliser(LandsatNormaliser):
-
+    """Normaliser for Landsat 8 data,to convert to TOA units."""
     def _normalise_band(self,band,band_id,scene_metadata):
+        """Normalises any Landsat 8 band into TOA units
 
+        Parameters
+        ----------
+        band : np.ndarray
+            Array with Digital Number pixel values from Landsat 8.
+        band_id : str
+            Identifier for band being normalised.
+        scene_metadata : dict
+            Scene-specific Landsat metadata values.
+
+        Returns
+        -------
+        band : np.ndarray
+            Normalised band in TOA units.
+        """
         bm = self.dataset_metadata['bands'][band_id] # Get a shortcut for the band's metadata
 
         gain = bm['gain']
@@ -332,9 +671,24 @@ class Landsat8Normaliser(LandsatNormaliser):
         return band
 
 class Landsat7Pre2011Normaliser(LandsatNormaliser):
-
+    """Normaliser for Landsat7 Pre-2011 data format, to convert to TOA units."""
     def _normalise_band(self,band,band_id,scene_metadata):
+        """Normalises any Landsat 7 pre-2011 band into TOA units
 
+        Parameters
+        ----------
+        band : np.ndarray
+            Array with Digital Number pixel values from Landsat 7.
+        band_id : str
+            Identifier for band being normalised.
+        scene_metadata : dict
+            Scene-specific Landsat metadata values.
+
+        Returns
+        -------
+        band : np.ndarray
+            Normalised band in TOA units.
+        """
         bm = self.dataset_metadata['bands'][band_id] # Get a shortcut for the band's metadata
 
         QCAL_MAX = bm['QCAL_MAX']
@@ -367,20 +721,68 @@ class Landsat7Pre2011Normaliser(LandsatNormaliser):
 #---ORGANISERS---
 
 class BySceneAndPatchOrganiser:
+    """Organiser for output files based on scenes and patch ids."""
     def __init__(self):
         pass
     def __call__(self,out_path,scene_id,patch_ids):
+        """Organises output directory structure for all samples taken from a scene.
+
+        Parameters
+        ----------
+        out_path : str
+            Parent directory for outputted dataset.
+        scene_id : str
+            Identifier for scene.
+        patch_ids : list
+            Identifiers for all samples taken from scene.
+
+        Returns
+        -------
+        list
+            Output directories corresponding to each entry in patch_ids.
+        """
         return [os.path.join(out_path,scene_id,patch_id) for patch_id in patch_ids]
 
 #---RESIZERS---
 
 class BandsMaskResizer:
-    def __init__(self,dataset_metadata,to_array=False,strict=True):
+    """Resizer for bands and mask, by changing their resolution.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    to_array : bool, optional
+        Whether to convert resized bands into single array (default is True).
+    strict : bool, optional
+        Whether to disallow resizing operations that lead to bands of different sizes (default is True).
+    """
+    def __init__(self,dataset_metadata,to_array=True,strict=True):
         self.dataset_metadata = dataset_metadata
         self.to_array = to_array
         self.strict = strict
 
     def __call__(self,bands,band_ids,mask,resolution):
+        """Resizes bands and mask to single resolution.
+
+        Parameters
+        ----------
+        bands : list
+            List of band arrays for a scene.
+        band_ids : list
+            Identifiers corresponding to bands.
+        mask : np.ndarray, bool
+            One-hot array.
+        resolution : int
+            Target resolution to resize to.
+
+        Returns
+        -------
+        rescaled_bands : np.ndarray or list
+            Resized band data at new resolution.
+        rescaled_mask : np.ndarray, bool
+            Rescaled one-hot array at new resolution.
+        """
         # BANDS
         band_target_sizes,mask_target_size = self._get_target_sizes(bands,band_ids,mask,resolution)
         rescaled_bands = []
@@ -398,7 +800,6 @@ class BandsMaskResizer:
 
         if self.to_array:
             rescaled_bands = np.moveaxis(np.array(rescaled_bands),0,-1)
-        print(rescaled_mask.shape,rescaled_bands.shape)
         return rescaled_bands,rescaled_mask
 
     def _get_target_sizes(self,bands,band_ids,mask,resolution):
@@ -421,6 +822,7 @@ class Saver(ABC):
         self.overwrite=overwrite
 
     def __call__(self,*args):
+
         self._make_dirs(args[-1])
         for items in zip(*args):
             self._save_sample(*items)
@@ -435,7 +837,6 @@ class Saver(ABC):
                 os.makedirs(path)
 
 class ImageMaskNumpySaver(Saver):
-
     def _save_sample(self,image,mask,out_path):
         image_path = os.path.join(out_path,'image.npy')
         mask_path = os.path.join(out_path,'mask.npy')
@@ -452,7 +853,6 @@ class ImageMaskNumpySaver(Saver):
 
 
 class ImageMaskDescriptorNumpySaver(ImageMaskNumpySaver):
-
     def __call__(self,images,masks,descriptors,out_paths):
         self._make_dirs(out_paths)
         if not isinstance(descriptors,list):
@@ -487,14 +887,42 @@ class MetadataJsonSaver(Saver):
 #---SPLITTERS---
 
 class SlidingWindowSplitter:
+    """Splitter for image/mask that takes evenly-spaced square patches.
+
+    Attributes
+    ----------
+    patch_size : int
+        Sidelength of extracted patches.
+    stride : int
+        Spacing between adjacent extractions.
+    filters : list, optional
+        All filters for patches that disallow certain criteria (default is None).
+    """
     def __init__(self, patch_size, stride, filters = None):
         self.patch_size = patch_size
         self.stride = stride
         self.filters = filters
 
     def __call__(self,bands,mask):
-        print(bands.shape)
-        print(mask.shape)
+        """Extracts evenly-spaced square patches from data.
+
+        Parameters
+        ----------
+        bands : np.ndarray
+            Band data for scene, aggregated into single 3D-array.
+        mask : np.ndarray, bool
+            One-hot encoded mask for scene.
+
+        Returns
+        -------
+        bands_patches : list
+            All extracted band data patches.
+        mask_patches : list
+            All extracted mask patches.
+        patch_ids : list
+            Identifiers for each patch based on x/y location.
+        """
+        # BUG: n_x,n_y are defined by //patch_size but should be function of stride.
         n_x = bands.shape[0] // self.patch_size
         n_y = bands.shape[1] // self.patch_size
         step_x = self.stride
@@ -521,24 +949,49 @@ class SlidingWindowSplitter:
                 patch_ids.append(str(i).zfill(3)+str(j).zfill(3))
                 num_valid_patches+=1
 
-        print(bands_patches.shape)
-
         bands_patches = [bands_patches[i,...] for i in range(num_valid_patches)]
         mask_patches = [mask_patches[i,...] for i in range(num_valid_patches)]
-
-        print(len(bands_patches))
 
         return bands_patches,mask_patches, patch_ids
 
 #---WRITERS---
 
 class LandsatMetadataWriter:
+    """Writer for output metadata writing of Landsat datasets.
+
+    Attributes
+    ----------
+    dataset_metadata : dict
+        Dataset-specific values and information.
+    sun_elevation : bool, optional
+        Whether to include scene-specific value for sun_elevation (defaut is False).
+    """
     def __init__(self,dataset_metadata,sun_elevation=False):
         self.dataset_metadata = dataset_metadata
         self.sun_elevation = sun_elevation
 
     def __call__(self,scene_metadata,scene_id,band_ids,class_ids,**kwargs):
-        self.output_metadata = {
+        """Create dictionary for all relevant metadata values for a Landsat scene.
+
+        Parameters
+        ----------
+        scene_metadata : dict
+            Scene-specific Landsat metadata values.
+        scene_id : str
+            Identifier for scene.
+        band_ids : list
+            Identifiers for bands.
+        class_ids : list
+            Identifiers for classes.
+        **kwargs
+            All other (name, value) pairs to be saved
+
+        Returns
+        -------
+        output_metadata : dict
+            Scene-specific output metadata.
+        """
+        output_metadata = {
                 'spacecraft_id': self.dataset_metadata['spacecraft_id'],
                 'scene_id': scene_id,
                 'bands':band_ids,
@@ -557,7 +1010,7 @@ class LandsatMetadataWriter:
                 'classes':class_ids
             }
         if self.sun_elevation:
-            self.output_metadata['sun_elevation'] = scene_metadata['SUN_ELEVATION']
+            output_metadata['sun_elevation'] = scene_metadata['SUN_ELEVATION']
 
         for band in band_ids:
             descriptive_names = [
@@ -572,8 +1025,8 @@ class LandsatMetadataWriter:
                           }
 
 
-            self.output_metadata['named_bands'] = named_bands
+            output_metadata['named_bands'] = named_bands
 
         #Add any extra user-supplied metadata
-        self.output_metadata.update(kwargs)
-        return self.output_metadata
+        output_metadata.update(kwargs)
+        return output_metadata
