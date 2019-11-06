@@ -26,7 +26,6 @@ import json
 
 import utils
 
-import pprint
 import types
 
 class ReadingError(Exception):
@@ -183,8 +182,6 @@ class L8Biome96(Dataset):
         band_file_register = self.bandregisterfinder(dir_substrings=scene_id)
         mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],dir_substrings=scene_id)
         scene_metadata_file = self.filefinder('_MTL',dir_substrings=scene_id)
-        print(self.out_path)
-        pprint.pprint(scene_id)
         #Load bands, mask and metadata
         bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
         mask = self.maskloader(mask_file)
@@ -298,7 +295,6 @@ class S2CESBIO38(Dataset):
         for root,dirs,paths in os.walk(self.in_path):
             if any(['classification_map' in path for path in paths]):
                 scenes.append(root.replace(self.in_path+os.sep,''))
-        pprint.pprint(scenes)
         return scenes
 
     def process_scene(self,scene_id):
