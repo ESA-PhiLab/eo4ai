@@ -22,7 +22,7 @@ This package aims to provide users with a pre-prepared dataset ready immediately
 80 manually annotated Landsat 8 scenes (1k-by-1k pixels). Data provided at 30m resolution but does not include sharper 'Panchromatic' band.
 
 ### **Landsat 7: Irish**<sup>[link](https://www.usgs.gov/land-resources/nli/landsat/spatial-procedures-automated-removal-cloud-and-shadow-sparcs-validation)</sup> *(USGS, 2016)*
-206 manually annotated Landsat 7 scenes ...
+206 manually annotated Landsat 7 scenes from a diverse range of latitudes. Data provided at nominal Landsat 7 resolution.
 
 ### **Sentinel-2: ALCD**<sup>[link](https://zenodo.org/record/1460961#.XYCTRzYzaHt)</sup> *(Baetens et al., 2018)*
 38 Sentinel-2 scenes annotated through an "active learning" system. Data provided in native band resolutions (10m - 60m). Does not include the parent scenes, only the masks.
