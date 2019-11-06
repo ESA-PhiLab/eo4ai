@@ -69,7 +69,7 @@ class Dataset(ABC):
             pool.map(self.process_scene, scenes)
         # for scene in scenes:
         #     self.process_scene(scene)
-        self.dump_README() # TODO
+        #self.dump_README() # TODO
 
     def dump_README(self):
         # TODO
@@ -169,7 +169,7 @@ class L8Biome96(Dataset):
 
     @staticmethod
     def _mask_imread(filename):
-        return np.squeeze(spy.open_image(filename).load()
+        return np.squeeze(spy.open_image(filename).load(filename))
 
     def get_scenes(self):
         scenes = []
@@ -289,9 +289,6 @@ class S2CESBIO38(Dataset):
         self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
         self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
 
-    @staticmethod
-    def _mask_imread(filename):
-        return np.squeeze(spy.open_image(filename).load()
 
     def get_scenes(self):
         scenes = []
