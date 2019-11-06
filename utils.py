@@ -396,8 +396,8 @@ class MultiFileBandLoader:
     ----------
     dataset_metadata : dict
         Dataset-specific values and information.
-    imread : func or str
-        Function or evaluatable string that reads some image file.
+    imread : func
+        Function that reads some image file.
     """
     def __init__(self,dataset_metadata,imread=None):
         self.dataset_metadata = dataset_metadata
@@ -428,10 +428,7 @@ class MultiFileBandLoader:
         if selected_band_ids is not None:
             band_file_register = dict([item for item in band_file_register.items() if any([band in item[1] for band in selected_band_ids])])
         for band_file,file_band_ids in band_file_register.items():
-            if isinstance(self.imread,str):
-                file_data = eval(self.imread.format(band_file))
-            else:
-                file_data = self.imread(band_file)
+            file_data = self.imread(band_file)
 
             if file_data.ndim==2:
                 file_bands = [file_data]
@@ -454,8 +451,8 @@ class SingleFileBandLoader:
     ----------
     dataset_metadata : dict
         Dataset-specific values and information.
-    imread : func or str
-        Function or evaluatable string that reads some image file.
+    imread : func
+        Function that reads some image file.
     """
     def __init__(self,dataset_metadata,imread=None):
         self.dataset_metadata = dataset_metadata
@@ -485,10 +482,7 @@ class SingleFileBandLoader:
 
         """
         band_ids = self.dataset_metadata['band_files'][file_id]
-        if isinstance(self.imread,str):
-            bands = eval(self.imread.format(path))
-        else:
-            bands = self.imread(path)
+        bands = self.imread(path)
         if selected_band_ids is None:
             # convert to list
             bands = [bands[...,i] for i in range(bands.shape[-1])]
@@ -505,8 +499,8 @@ class ImageLoader:
 
     Attributes
     ----------
-    imread : func or str
-        Function or evaluatable string that reads some image file.
+    imread : func
+        Function that reads some image file.
     """
     def __init__(self,imread=None):
         if imread is None:
@@ -527,8 +521,6 @@ class ImageLoader:
         np.ndarray
             Image data loaded from path.
         """
-        if isinstance(self.imread,str):
-            return eval(self.imread.format(path))
         return self.imread(path)
 
 class SimpleSpectralDescriptorsLoader:
@@ -894,8 +886,6 @@ class ImageMaskNumpySaver(Saver):
         else:
             np.save(image_path,image)
             np.save(mask_path,mask)
-
-
 
 class ImageMaskDescriptorNumpySaver(ImageMaskNumpySaver):
     def __call__(self,images,masks,descriptors,out_paths):
