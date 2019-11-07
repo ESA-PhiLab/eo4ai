@@ -24,6 +24,7 @@ from skimage import transform
 from skimage.io import imread
 import glymur
 import json
+from zipfile import ZipFile
 
 import utils
 
