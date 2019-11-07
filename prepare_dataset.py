@@ -169,7 +169,7 @@ class L8Biome96(Dataset):
 
     @staticmethod
     def _mask_imread(filename):
-        return np.squeeze(spy.open_image(filename).load(filename))
+        return np.squeeze(spy.open_image(filename).load())
 
     def get_scenes(self):
         scenes = []
