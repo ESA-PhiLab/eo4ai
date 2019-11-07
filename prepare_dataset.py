@@ -7,6 +7,7 @@ import argparse
 from ast import literal_eval
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+import getpass
 from glob import glob
 from itertools import repeat
 import math
@@ -301,7 +302,7 @@ class S2CESBIO38(Dataset):
     def scene_present(self,scene_id):
         for root,dirs,paths in os.walk(scene_id):
             for dir in dirs:
-                if dir.endswith('.SAFE'):
+                if dir.endswith('.SAFE') or dir.endswith('.SAFE/'):
                     return True
         return False
 
@@ -317,18 +318,18 @@ class S2CESBIO38(Dataset):
                 self.download_scene(scene)
 
     def download_scene(self,scene_id):
-        with open(os.path.join(scene_id,'used_parameters.json'), 'r') as f:
+        with open(os.path.join(self.in_path,scene_id,'used_parameters.json'), 'r') as f:
             scene_parameters = json.load(f)
         original_cloudy_product_id = scene_parameters['cloudy_product_name']
         downloadable_product_id = self.product_id_dict[original_cloudy_product_id]
         if self.sensat_username is None:
             self.sensat_username = input('Please enter SentinelHub username: ')
-            self.sensat_passwd   = input('Please enter SentinelHub password: ')
+            self.sensat_passwd   = getpass.getpass('Please enter SentinelHub password: ')
             self.api = SentinelAPI(self.sensat_username, self.sensat_passwd)
         prod = self.api.query(raw=downloadable_product_id)
-        self.api.download_all(prod,directory_path = scene_id)
-        with ZipFile(os.path.join(scene_id,downloadable_product_id+'.zip'),'r') as f:
-            f.extractall(scene_id)
+        self.api.download_all(prod,directory_path = os.path.join(self.in_path,scene_id))
+        with ZipFile(os.path.join(self.in_path,scene_id,downloadable_product_id+'.zip'),'r') as f:
+            f.extractall(os.path.join(self.in_path,scene_id))
 
 
     def get_scenes(self):
