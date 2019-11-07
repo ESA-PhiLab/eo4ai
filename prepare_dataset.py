@@ -29,6 +29,8 @@ import utils
 
 import types
 
+from sentinelsat import SentinelAPI
+
 class ReadingError(Exception):
     def __init__(self, message):
 
@@ -286,10 +288,47 @@ class S2CESBIO38(Dataset):
         self.outputorganiser = utils.BySceneAndPatchOrganiser()
         self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
         self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.sensat_username = None
+        self.sensat_passwd = None
+        self.download_scenes()
+
 
     @staticmethod
     def _band_imread(filename):
         return glymur.Jp2k(filename)[:]
+
+    def scene_present(self,scene_id):
+        for root,dirs,paths in os.walk(scene_id):
+            for dir in dirs:
+                if dir.endswith('.SAFE'):
+                    return True
+        return False
+
+    def download_scenes(self):
+        scene_ids = self.get_scenes()
+        with open(join(abspath(dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
+            try:
+                self.product_id_dict = yaml.safe_load(f)
+            except yaml.YAMLError as exc:
+                raise exc
+        for scene in scene_ids:
+            if not self.scene_present(scene):
+                self.download_scene(scene)
+
+    def download_scene(self,scene_id):
+        with open(os.path.join(scene_id,'used_parameters.json'), 'r') as f:
+            scene_parameters = json.load(f)
+        original_cloudy_product_id = scene_parameters['cloudy_product_name']
+        downloadable_product_id = self.product_id_dict[original_cloudy_product_id]
+        if self.sensat_username is None:
+            self.sensat_username = input('Please enter SentinelHub username: ')
+            self.sensat_passwd   = input('Please enter SentinelHub password: ')
+            self.api = SentinelAPI(self.sensat_username, self.sensat_passwd)
+        prod = self.api.query(raw=downloadable_product_id)
+        self.api.download_all(prod,directory_path = scene_id)
+        with ZipFile(os.path.join(scene_id,downloadable_product_id+'.zip'),'r') as f:
+            f.extractall(scene_id)
+
 
     def get_scenes(self):
         scenes = []
