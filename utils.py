@@ -747,7 +747,7 @@ class Landsat7Pre2011Normaliser(LandsatNormaliser):
                 band /= math.sin(float(self.scene_metadata['SUN_ELEVATION'])*math.pi/180)
 
         if bm['type'] == 'TOA Normalised Brightness Temperature':
-            band = (bm['K2']  / np.log(bm['K2'] / radiance + 1))
+            band = (bm['K2']  / np.log(bm['K1'] / radiance + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
         return band
 
