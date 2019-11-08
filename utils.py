@@ -695,7 +695,7 @@ class Landsat8Normaliser(LandsatNormaliser):
         band = band * gain + offset
 
         if bm['type'] == 'TOA Normalised Brightness Temperature':
-            band = (bm['K2']  / np.log(bm['K2'] / band + 1))
+            band = (bm['K2']  / np.log(bm['K1'] / band + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
 
         if bm.get('solar_correction', False):
