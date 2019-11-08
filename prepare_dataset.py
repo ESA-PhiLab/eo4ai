@@ -129,7 +129,7 @@ class L8SPARCS80(Dataset):
         self.scene_metadata = self.metadataloader(scene_metadata_file)
 
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)
@@ -192,7 +192,7 @@ class L8Biome96(Dataset):
         mask = self.maskloader(mask_file)
         self.scene_metadata = self.metadataloader(scene_metadata_file)
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)
@@ -255,7 +255,7 @@ class L7Irish206(Dataset):
         mask,class_ids = self.encoder(mask,bands)
 
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Resize bands and mask
         bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
@@ -363,7 +363,7 @@ class S2CESBIO38(Dataset):
         bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
         mask = self.maskloader(mask_file)
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,None)
+        bands = self.normaliser(bands,band_ids,None,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)
