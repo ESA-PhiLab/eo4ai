@@ -7,6 +7,7 @@ import argparse
 from ast import literal_eval
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+import getpass
 from glob import glob
 from itertools import repeat
 import math
@@ -22,8 +23,15 @@ from os.path import join, dirname, abspath, split
 import ast
 from skimage import transform
 from skimage.io import imread
+import glymur
 import json
+from zipfile import ZipFile
 
+import utils
+
+import types
+
+from sentinelsat import SentinelAPI
 
 class ReadingError(Exception):
     def __init__(self, message):
@@ -35,7 +43,7 @@ class ReadingError(Exception):
 class Dataset(ABC):
     """Base class for datasets.
     """
-    def __init__(self, satellite_id, in_path, generate_metadata, patch_size, stride, jobs, resolution, out_path, nodata_threshold, bands):
+    def __init__(self, dataset_id, in_path, generate_metadata, patch_size, stride, jobs, resolution, out_path, nodata_threshold, selected_band_ids):
         self.in_path = in_path
         self.patch_size = patch_size
         self.stride = stride
@@ -46,544 +54,335 @@ class Dataset(ABC):
         self.out_path = out_path
         self.nodata_threshold = nodata_threshold
         self.generate_metadata = generate_metadata
-        self.satellite_id = satellite_id
 
-        # We have two metadata variables: satellite and tile metadata.
-        # TM should change for each new tile.
-        self.sm = self.get_sm(satellite_id)
-        self.tm = None
+        # We have two metadata variables: dataset and scene metadata.
+        # scene_metadata should change for each new tile.
+        self.dataset_metadata = self.get_dataset_metadata(dataset_id)
+        self.scene_metadata = None
 
-        # Convert bands into a list:
-        self.bands = literal_eval(bands)
+        # Convert band ids into a list:
+        self.selected_band_ids = literal_eval(selected_band_ids)
+
+        # TODO
+        self.README_config = locals()
 
 
-    @abstractmethod
     def process(self):
-        """Start processing of dataset
-        """
+        scenes = self.get_scenes()
+        with ThreadPoolExecutor(self.jobs) as pool:
+            pool.map(self.process_scene, scenes)
+        # for scene in scenes:
+            # self.process_scene(scene)
+        #self.dump_README() # TODO
+
+    def dump_README(self):
+        # TODO
         pass
 
-    def get_all_directories(self):
-        for root, dirs, _ in os.walk(self.in_path):
-            for directory in map(lambda d: join(root, d), dirs):
-                yield directory
+    @abstractmethod
+    def get_scenes(self):
+        pass
+
+    @abstractmethod
+    def process_scene(self):
+        pass
 
     @staticmethod
-    def get_sm(satellite):
-        with open(join(abspath(dirname(__file__)), 'constants/sensors', satellite + '.yaml'), 'r') as stream:
+    def get_dataset_metadata(dataset_id):
+        with open(join(abspath(dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
             try:
                 return yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 raise exc
 
-    def get_descriptors(self, bands):
-        descriptors = np.empty((len(bands), 3), dtype=np.float32)
-        for i, band in enumerate(bands):
-            centre = self.sm['bands'][band]['band_centre']
-            width = self.sm['bands'][band]['band_width']
-            descriptors[i, :] = [centre-width/2, centre, centre+width/2]
+class L8SPARCS80(Dataset):
 
-        return descriptors
+    def __init__(self,**kwargs):
+        super().__init__(dataset_id='L8SPARCS80', **kwargs)
+        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
+        self.bandloader = utils.SingleFileBandLoader(self.dataset_metadata)
+        self.maskloader = utils.ImageLoader()
+        self.metadataloader = utils.LandsatMTLLoader()
+        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = utils.MapByColourEncoder(self.dataset_metadata)
+        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
+        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True)
+        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride)
+        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = utils.BySceneAndPatchOrganiser()
+        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
 
-    def get_metadata(self, bands):
-        return {
-            'band_centres': [
-                self.sm['bands'][band]['band_centre']
-                for band in bands
-            ],
-            'band_widths': [
-                self.sm['bands'][band]['band_width']
-                for band in bands
-            ],
-            'resolution': self.resolution,
-            'satellite_id': self.satellite_id,
-            'bands': bands,
-            'classes': list(self.classes.keys()),
-            'named_band': None,
-            'sun_elevation': None,
-            'band_types': [
-                self.sm['bands'][band]['type']
-                for band in bands
-            ],
-        }
+    def get_scenes(self):
+        return list(set([file[:21] for file in os.listdir(self.in_path)]))
 
-    def read(self, filename):
-        image = imread(filename)
-        if not image.shape[0]:
-            raise ReadingError(f'Cannot load {filename}')
-        return image
+    def process_scene(self,scene_id):
+        #Find scene's files
+        band_file = self.filefinder('_data',startswith=scene_id)
+        mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],startswith=scene_id)
+        scene_metadata_file = self.filefinder('_mtl',startswith=scene_id)
 
-    def normalise(self, band_with_id):
-        idx, band = band_with_id
-        return band
+        #Load bands, mask and metadata
+        bands,band_ids = self.bandloader(band_file,'_data',selected_band_ids=self.selected_band_ids)
+        mask = self.maskloader(mask_file)
+        self.scene_metadata = self.metadataloader(scene_metadata_file)
 
-    @staticmethod
-    def resize(image_and_target_size):
-        image, target_size = image_and_target_size
-        if image.shape == target_size:
-            return image
+        #Normalise band values
+        bands = self.normaliser(bands,band_ids,self.scene_metadata)
 
-        # opencv works with width x height but numpy arrays with
-        # rows (height) x columns (width):
-        image = cv.resize(
-            image, target_size[::-1],
-            cv.INTER_CUBIC
-        )
-        return image
+        #Encode mask
+        mask,class_ids = self.encoder(mask)
 
-    @staticmethod
-    def resize_mask(mask, target_size):
-        if mask.shape == target_size:
-            return mask
+        #Resize bands and mask
+        bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
 
-        # opencv works with width x height but numpy arrays with
-        # rows (height) x columns (width) therefore we reverse target_size.
-        # We need to keep the unique values of mask so we disable any interpolation
-        # and use the nearest neighbour instead.
-        print(target_size)
-        mask = cv.resize(
-            mask, target_size[::-1],cv.INTER_NEAREST)
-        return mask
+        #Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
+        #get output_metadata
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
+        #Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
 
-    def load_bands(self, ids, files):
-        """Read, resize, normalise and combine bands
+        #Save data
+        self.datasaver(band_patches,mask_patches,self.descriptors,output_paths)
 
-        Args:
-            ids: List of band identifiers.
-            files: List of band file names. The order will be kept when the bands are
-                stacked onto each other. For example, `['/path/B01.tif', '/path/B02.tif')]`.
-
-
-        Returns:
-            A numpy.array with all bands and a no data mask (True where no data).
-        """
-
-        with ThreadPoolExecutor(self.jobs) as pool:
-            # Load the data
-            bands = list(pool.map(self.read, files))
-
-            # Resize the bands. To make sure all bands end up with the same size, we calculate
-            # the target size for the first bands only and use it for all other bands.
-            if self.sm['bands'][ids[0]]['resolution'] != self.resolution:
-                scale_factor = self.sm['bands'][ids[0]]['resolution'] / self.resolution
-                target_size = bands[0].shape[0] * scale_factor, bands[0].shape[1] * scale_factor
-            else:
-                target_size = bands[0].shape
-
-            bands = list(pool.map(
-                self.resize, zip(bands, repeat(target_size))
-            ))
-
-            # Create a mask for no data
-            no_data = ~np.all(bands, axis=0)
-
-            # Normalise the data
-            bands = list(pool.map(self.normalise, zip(ids, bands)))
-
-            # We need the channels at the last dimension
-            bands = np.moveaxis(np.stack(bands), 0, -1)
-
-            # make sure that no data stays no data:
-            bands[no_data, :] = 0
-
-        return bands, no_data
-
-    def split_and_save(self, tile_name, bands, mask, no_data, metadata=None, descriptors=None):
-        n_x = bands.shape[0] // self.patch_size
-        n_y = bands.shape[1] // self.patch_size
-        step_x = self.stride
-        step_y = self.stride
-
-        valid_patches = 0
-        skipped_patches = 0
-
-        for i in range(n_x):
-            for j in range(n_y):
-                region = slice(i*step_x,i*step_x+self.patch_size), \
-                         slice(j*step_y,j*step_y+self.patch_size), ...
-                mask_patch = mask[region]
-
-                if np.mean(no_data[region[:2]]) <= self.nodata_threshold:
-
-                    image_patch = bands[region]
-                    bmax = np.nanmax(image_patch[..., 0]) - np.finfo(np.float32).eps
-                    if np.nanmean(image_patch[...,0] >= bmax) > 0.25:
-                        skipped_patches += 1
-                        continue
-
-                    print('ROW:', str(i).zfill(2), '  COL:', str(j).zfill(2), end='\r')
-
-                    patch_id = join(tile_name, str(i).zfill(3)+str(j).zfill(3))
-                    self.save_patch(
-                        patch_id, image_patch, mask_patch, metadata, descriptors
-                    )
-                    valid_patches += 1
-
-        print(f'Summary: {n_x*n_y} potential, {valid_patches} valid and {skipped_patches} oversaturated patches')
-
-    def save_patch(self, patch_id, image_patch, mask_patch, metadata=None, descriptors=None):
-        patch_path = join(self.out_path, patch_id)
-        os.makedirs(patch_path, exist_ok=True)
-
-        np.save(join(patch_path, 'image.npy'), image_patch.astype('float32'))
-        np.save(join(patch_path, 'mask.npy'), mask_patch.astype(bool))
-
-        if descriptors is not None:
-            np.save(join(patch_path, 'descriptors.npy'), descriptors.astype('float32'))
-
-        if self.generate_metadata and metadata is not None:
-            with open(join(patch_path, 'metadata.json'),'w') as f:
-                json.dump(metadata, f)
-
+        #Save metadata
+        self.metadatasaver(self.output_metadata,output_paths)
 
 
 class L8Biome96(Dataset):
     def __init__(self, **kwargs):
-        super().__init__(satellite_id='Landsat8', **kwargs)
-
-    def process(self):
-        tile_dirs = filter(self.is_valid_dir, self.get_all_directories())
-        for tile_dir in tile_dirs:
-            print(tile_dir)
-
-    def is_valid_dir(self, directory):
-        """
-        Args:
-            directory: Path to an hypothetical data directory.
-
-        Returns:
-            True if dir contains all band files and a .img envi mask file, and no subdirectories
-        """
-        children = os.listdir(directory)
-        for i in range(1, 12):
-            suffix = '_B'+str(i)+'.TIF'
-            if not any(child.endswith(suffix) for child in children):
-                return False
-        if not any(child.endswith('fixedmask.img') for child in children):
-            return False
-        return True
-
-    def read(self, filename):
-        return tif.imread(filename)
-
-
-
-class L8SPARCS80(Dataset):
-    def __init__(self, **kwargs):
-        self.dataset_bands = OrderedDict([
-            ('B1', 'B1'),
-            ('B2', 'B2'),
-            ('B3', 'B3'),
-            ('B4', 'B4'),
-            ('B5', 'B5'),
-            ('B6', 'B6'),
-            ('B7', 'B7'),
-            # SPARCS does not contain 'panchromatic' B8
-            ('B9', 'B9'),
-            ('B10', 'B10'),
-            ('B11', 'B11'),
-        ])
-        super().__init__(satellite_id='Landsat8',**kwargs)
-        self.L8SPARCS80_resolution = 30
-        self.mask_vals = []
-        self.classes = self.get_classes()
+        super().__init__(dataset_id='L8Biome96', **kwargs)
+        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
+        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
+        self.maskloader = utils.ImageLoader(imread=self._mask_imread)
+        self.metadataloader = utils.LandsatMTLLoader()
+        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
+        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = utils.BySceneAndPatchOrganiser()
+        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
 
     @staticmethod
-    def get_classes():
-        with open(join(abspath(dirname(__file__)),'constants', 'datasets','Landsat8_SPARCS80','classes.yaml'), 'r') as stream:
-            try:
-                return yaml.safe_load(stream)
-            except yaml.YAMLError as exc:
-                raise exc
+    def _mask_imread(filename):
+        return np.squeeze(spy.open_image(filename).load())
 
-    def process(self):
-        # The user might want to have only some bands:
-        if self.bands is not None:
-            required_bands = OrderedDict([
-                (old, new)
-                for old, new in self.dataset_bands.items()
-                if new in self.bands
-            ])
-        else:
-            required_bands = self.dataset_bands
+    def get_scenes(self):
+        scenes = []
+        for root,dirs,paths in os.walk(self.in_path):
+            if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('_fixedmask.hdr') for path in paths]):
+                scenes.append(root.replace(self.in_path+os.sep,''))
+        return scenes
 
-        descriptors = self.get_descriptors(required_bands.values())
-        metadata = self.get_metadata(list(required_bands.values()))
-        metadata['named_band'] = {
-            'RED': 'B4',
-            'GREEN': 'B3',
-            'BLUE': 'B2',
-        }
+    def process_scene(self,scene_id):
+        #Find scene's files
+        band_file_register = self.bandregisterfinder(dir_substrings=scene_id)
+        mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],dir_substrings=scene_id)
+        scene_metadata_file = self.filefinder('_MTL',dir_substrings=scene_id)
+        #Load bands, mask and metadata
+        bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
+        mask = self.maskloader(mask_file)
+        self.scene_metadata = self.metadataloader(scene_metadata_file)
+        #Normalise band values
+        bands = self.normaliser(bands,band_ids,self.scene_metadata)
 
-        tile_names = self.get_tile_names()
-        for tile_name in tile_names:
-            descriptors = self.get_descriptors(required_bands.values())
-            metadata = self.get_metadata(list(required_bands.values()))
-            metadata['named_band'] = {
-                'RED': required_bands['B4'],
-                'GREEN': required_bands['B3'],
-                'BLUE': required_bands['B2']
-            }
-            # Get current tile metadata:
-            self.tm = self.get_tm(tile_name)
-            if self.tm is None:
-                print('Tile skipped since no tile metadata was found!')
-                continue
+        #Encode mask
+        mask,class_ids = self.encoder(mask)
 
-            metadata['sun_elevation'] = self.tm['SUN_ELEVATION']
-            bands = self.load_bands(tile_name,required_bands)
-            mask  = self.load_mask(tile_name)
-            no_data = np.zeros(mask.shape[:2])
-            self.split_and_save(tile_name, bands, mask, no_data, metadata, descriptors)
+        #Resize bands and mask
+        bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
 
+        #Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
-    def get_tile_names(self):
-        return list(set([file[:21] for file in os.listdir(self.in_path)]))
+        #get output_metadata
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
+        #Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
+        #Save data
+        self.datasaver(band_patches,mask_patches,self.descriptors,output_paths)
 
+        #Save metadata
+        self.metadatasaver(self.output_metadata,output_paths)
 
-    def get_tm(self, tile_name):
-        filename = join(self.in_path, tile_name+'_mtl.txt')
-        if not filename:
-            return None
-        with open(filename) as file:
-            return {
-                entry[0]: entry[1]
-                for entry in map(lambda l: "".join(l.split()).split('='), file)
-                if len(entry) == 2
-            }
-
-    def load_bands(self,tile_name,required_bands):
-        band_file = glob(join(self.in_path,tile_name+'*_data.tif'))
-        # TODO Raise error if there is not exactly one file in band_file
-        band_file = band_file[0]
-        bands = tif.imread(band_file)
-        band_idxs = [i for i,k in enumerate(self.dataset_bands.keys()) if k in required_bands.keys()]
-        bands = bands[...,band_idxs]
-
-        if self.L8SPARCS80_resolution != self.resolution:
-            scale_factor = self.L8SPARCS80_resolution / self.resolution
-            target_size = int(bands.shape[0] * scale_factor), int(bands.shape[1] * scale_factor)
-            bands = self.resize(bands,target_size)
-
-        bands = self.normalise(bands,required_bands)
-        return bands
-
-    def load_mask(self, tile_name):
-        band_file = glob(join(self.in_path,tile_name+'*_mask.png'))[0]
-        mask = imread(band_file)
-        if self.L8SPARCS80_resolution != self.resolution:
-            scale_factor = self.L8SPARCS80_resolution / self.resolution
-            target_size = int(mask.shape[0] * scale_factor), int(mask.shape[1] * scale_factor)
-            mask = self.resize_mask(mask,target_size)
-
-        new_mask = np.stack([np.all(mask[:,:]==colour,axis=-1) for colour in self.classes.values()],axis=-1)
-
-        return new_mask
-
-    @staticmethod
-    def resize(image,target_size):
-        image = cv.resize(
-            image, target_size[::-1],
-            cv.INTER_CUBIC
-        )
-        print(image.shape)
-        return image
-
-    def normalise(self, bands, band_ids):
-        for i,band_id in enumerate(band_ids):
-            data = bands[...,i]
-            bm = self.sm['bands'][band_id] # Get a shortcut for the band's netadata
-
-            gain = bm['gain']
-            if isinstance(gain, str):
-                gain = float(self.tm[gain])
-            offset = bm['offset']
-            if isinstance(offset, str):
-                offset = float(self.tm[offset])
-            data = data * gain + offset
-
-            if bm['type'] == 'TOA Normalised Brightness Temperature':
-                data = (bm['K2']  / np.log(bm['K2'] / data + 1))
-                data = (data - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
-
-            if bm.get('solar_correction', False):
-                data /= math.sin(float(self.tm['SUN_ELEVATION'])*math.pi/180)
-
-            bands[...,i] = data
-        return bands
 
 class L7Irish206(Dataset):
+    def __init__(self,**kwargs):
+        super().__init__(dataset_id='L7Irish206', **kwargs)
+        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
+        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
+        self.maskloader = utils.ImageLoader(imread=tif.imread)
+        self.metadataloader = utils.LandsatMTLLoader()
+        self.normaliser = utils.Landsat7Pre2011Normaliser(self.dataset_metadata)
+        self.encoder = utils.L7IrishEncoder(self.dataset_metadata)
+        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
+        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = utils.BySceneAndPatchOrganiser()
+        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+
+    def get_scenes(self):
+        scenes = []
+        for root,dirs,paths in os.walk(self.in_path):
+            if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('mask2019.tif') for path in paths]):
+                scenes.append(root.replace(self.in_path+os.sep,''))
+        return scenes
+
+    def process_scene(self,scene_id):
+        #Find scene's files
+        band_file_register = self.bandregisterfinder(dir_substrings=scene_id)
+        mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],dir_substrings=scene_id)
+        scene_metadata_file = self.filefinder('_MTL',dir_substrings=scene_id)
+
+        #Load bands, mask and metadata
+        bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
+        mask = self.maskloader(mask_file)
+        self.scene_metadata = self.metadataloader(scene_metadata_file)
+
+        #Encode mask
+        mask,class_ids = self.encoder(mask,bands)
+
+        #Normalise band values
+        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+
+        #Resize bands and mask
+        bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
+
+        #Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
+
+        #get output_metadata
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,scene_metadata=self.scene_metadata,resolution=self.resolution)
+        #Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
+        #Save data
+        self.datasaver(band_patches,mask_patches,self.descriptors,output_paths)
+
+        #Save metadata
+        self.metadatasaver(self.output_metadata,output_paths)
+
+class S2CESBIO38(Dataset):
     def __init__(self, **kwargs):
-        super().__init__(satellite_id='Landsat7', **kwargs)
-        #PLACEHOLDER FOR classes.yaml file. Need solution to Irish labelling problem.
-        self.classes = {'FILL': 0, 'SHADOW':1, 'CLEAR':2,'THIN CLOUD': 3, 'THICK CLOUD': 4}
-    def get_tm(self, tile_name):
-        filename = glob(
-            join(abspath(dirname(__file__)), 'constants/datasets/Landsat7_Irish206', tile_name, '*_MTL.txt')
-        )
-        if not filename:
-            return None
-        filename = filename[0]
-        with open(filename) as file:
-            return {
-                entry[0]: entry[1]
-                for entry in map(lambda l: "".join(l.split()).split('='), file)
-                if len(entry) == 2
-            }
+        super().__init__(dataset_id='S2CESBIO38', **kwargs)
+        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
+        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=self._band_imread)
+        self.maskloader = utils.ImageLoader(imread=tif.imread)
+        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
+        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=False)
+        self.outputorganiser = utils.BySceneAndPatchOrganiser()
+        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.sensat_username = None
+        self.sensat_passwd = None
+        self.download_scenes()
 
-    def process(self):
-        # Originally band names are 10, ..., 50, 61, 62, 70 for the Irish dataset. We
-        # standardise them here to make future processing easier.
-        required_bands = {
-            'B10': 'B1',
-            'B20': 'B2',
-            'B30': 'B3',
-            'B40': 'B4',
-            'B50': 'B5',
-            'B61': 'B6_VCID_1',
-            'B62': 'B6_VCID_2',
-            'B70': 'B7',
-            'B80': 'B8'
-        }
 
-        # The user might want to have only some bands:
-        if self.bands is not None:
-            required_bands = {
-                old: new
-                for old, new in required_bands.items()
-                if new in self.bands
-            }
+    @staticmethod
+    def _band_imread(filename):
+        return glymur.Jp2k(filename)[:]
 
-        # We need a fixed order of the bands to compose them later in a numpy array
-        required_bands = OrderedDict(sorted(required_bands.items()))
+    def download_present(self,scene_id):
+        for root,dirs,paths in os.walk(scene_id):
+            for dir in dirs:
+                if dir.endswith('IMG_DATA') or dir.endswith('IMG_DATA/'):
+                    return True
+        return False
 
-        descriptors = self.get_descriptors(required_bands.values())
-        metadata = self.get_metadata(list(required_bands.values()))
-        metadata['named_band'] = {
-            'RED': required_bands['B30'],
-            'GREEN': required_bands['B20'],
-            'BLUE': required_bands['B10']
-        }
-
-        for directory in self.get_all_directories():
-            # Check for band files:
-            band_files = list(filter(
-                lambda d: not d.endswith('_BQA.TIF'),
-                glob(join(directory, '*_B*.TIF'))
-            ))
-            if len(band_files) != 9:
-                continue
-            mask_file = glob(join(directory, '*mask*.TIF'))
-            if not mask_file:
-                continue
-            mask_file = mask_file[0]
-
-            print(directory)
-
-            # Get biome and tile id:
-            tile_name = join(*directory.split(os.path.sep)[-2:])
-
-            # Get current tile metadata:
-            self.tm = self.get_tm(tile_name)
-            if self.tm is None:
-                print('Tile skipped since no tile metadata was found!')
-                continue
-
-            metadata['sun_elevation'] = self.tm['SUN_ELEVATION']
-
-            # We need the bands in a sorted ascending order:
-            band_files = sorted(band_files)
-
-            # Retrieve the ids from all bands we need:
-            ids, band_files = zip(*[
-                [required_bands[file.split('_')[-1][:-4]], file]
-                for file in band_files
-                if file.split('_')[-1][:-4] in required_bands
-            ])
-            ids = list(ids)
-
-            # Sanity-check: are the bands from the directory, really the ones that we expect?
-            if ids != list(required_bands.values()):
-                print(directory, 'was skipped since not all required bands were found!')
-                print('Missing bands:', set(required_bands.values()) - set(ids))
-                continue
-
+    def download_scenes(self):
+        scene_ids = self.get_scenes(only_downloaded=False)
+        with open(join(abspath(dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
             try:
-                bands, no_data = self.load_bands(ids, band_files)
-            except ReadingError as err:
-                print(err)
-                continue
+                self.product_id_dict = yaml.safe_load(f)
+            except yaml.YAMLError as exc:
+                raise exc
+        for scene in scene_ids:
+            if not self.download_present(os.path.join(self.in_path,scene)):
+                self.download_scene(scene)
 
-            mask = self.load_mask(mask_file, no_data)
+    def download_scene(self,scene_id):
+        scene_dir = os.path.join(self.in_path,scene_id)
+        with open(os.path.join(scene_dir,'used_parameters.json'), 'r') as f:
+            scene_parameters = json.load(f)
+        original_cloudy_product_id = scene_parameters['cloudy_product_name']
+        downloadable_product_id = self.product_id_dict[original_cloudy_product_id]
+        if self.sensat_username is None:
+            self.sensat_username = input('Please enter SentinelHub username: ')
+            self.sensat_passwd   = getpass.getpass('Please enter SentinelHub password: ')
+            self.api = SentinelAPI(self.sensat_username, self.sensat_passwd)
+        prod = self.api.query(raw=downloadable_product_id)
+        self.api.download_all(prod,directory_path = scene_dir)
 
-            self.split_and_save(tile_name, bands, mask, no_data, metadata, descriptors)
 
-    def load_mask(self, file, no_data):
-        mask = imread(file)
-        mask = self.resize_mask(mask, no_data.shape[:2])
+        os.makedirs(os.path.join(scene_dir,'IMG_DATA'))
+        with ZipFile(os.path.join(scene_dir,downloadable_product_id+'.zip'),'r') as zf:
+            # f.extractall(scene_dir)
 
-        new_mask = np.empty((*mask.shape[:2], 5), dtype=bool)
-        if mask[0,0] == 0:
-            # Class and pixel value:
-            new_mask[..., 0] = no_data  # FILL (no data)
-            new_mask[..., 1] = False      # SHADOW (there is no shadow class defined)
-            new_mask[..., 2] = mask == 128  # CLEAR
-            new_mask[..., 3] = mask == 192  # THIN
-            new_mask[..., 4] = mask == 255  # THICK
-        else:
-            # Pixel values for FILL and CLEAR are ambiguous. So we have to check whether
-            # there is actual data in other bands:
-            new_mask[..., 0] = no_data    # FILL (no data)
-            new_mask[..., 1] = mask == 0  # SHADOW
-            new_mask[..., 2] = (mask == 255) & ~no_data  # CLEAR
-            new_mask[..., 3] = mask == 192  # THIN
-            new_mask[..., 4] = mask == 128  # THICK
+            for file in zf.namelist():
 
-        return new_mask
+                if 'IMG_DATA' in file and not (file.endswith('IMG_DATA') or file.endswith('IMG_DATA/')):
+                    file_data = zf.read(file)
+                    with open(os.path.join(scene_dir, 'IMG_DATA',os.path.basename(file)), "wb") as fout:
+                        fout.write(file_data)
 
-    def normalise(self, band_with_id):
-        band_id, data = band_with_id
-        bm = self.sm['bands'][band_id] # Get a shortcut for the band's netadata
+        os.remove(os.path.join(scene_dir,downloadable_product_id+'.zip'))
 
-        gain = bm['gain']
-        if isinstance(gain, str):
-            gain = float(self.tm[gain])
-        offset = bm['offset']
-        if isinstance(offset, str):
-            offset = float(self.tm[offset])
 
-        data = data * gain + offset
+    def get_scenes(self,only_downloaded=True):
+        scenes = []
+        for root,dirs,paths in os.walk(self.in_path):
+            if any(['classification_map' in path for path in paths]):
+                if only_downloaded and self.download_present(root):
+                    scenes.append(root.replace(self.in_path+os.sep,''))
+                elif not only_downloaded:
+                    scenes.append(root.replace(self.in_path+os.sep,''))
+        return scenes
 
-        if bm['type'] == 'TOA Normalised Brightness Temperature':
-            data = (bm['K2']  / np.log(bm['K2'] / data + 1))
-            data = (data - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
+    def process_scene(self,scene_id):
+        #Find scene's files
+        band_file_register = self.bandregisterfinder(dir_substrings=[scene_id])
+        mask_file = self.filefinder(self.dataset_metadata['mask']['mask_file'],dir_substrings=scene_id)
+        #Load bands, mask and metadata
+        bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
+        mask = self.maskloader(mask_file)
+        #Normalise band values
+        bands = self.normaliser(bands,band_ids,None)
 
-        if bm.get('solar_correction', False):
-            data /= math.sin(float(self.tm['SUN_ELEVATION'])*math.pi/180)
+        #Encode mask
+        mask,class_ids = self.encoder(mask)
 
-        return data
+        #Resize bands and mask
+        bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
 
-#             if generate_metadata:
-#                 metadata = {'classes': ['FILL','SHADOW','CLEAR','THIN CLOUD','THICK CLOUD']}
-#             else:
-#                 metadata = None
-#             print('Loading', os.path.split(tile_dir)[-1], '...')
-#             img_arr, mask_arr = clean_tile(
-#                 tile_dir, resolution, bands=bands, use_solar_elevation=use_solar_elevation,metadata=metadata)
-#             print('\rLoaded', os.path.split(tile_dir)[-1])
-#             tile_out_path = tile_dir.replace(biome_data_path,out_path)
-#             os.makedirs(tile_out_path)
-#             print('Splitting and saving', os.path.split(tile_dir)[-1], '...')
-#             split_and_save(img_arr, mask_arr, tile_out_path,
-#                            splitsize=splitsize, allow_overlap=allow_overlap,nodata_threshold=nodata_threshold,metadata=metadata)
-#             print('\rSplit and saved', os.path.split(tile_dir)[-1])
-#             band_files = glob(join(tile_dir, '*'))
+        #Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands,mask)
 
-class S2CESBIO(Dataset):
-    def __init__(self, **kwargs):
-        ...
+        #get output_metadata
+        self.output_metadata = self.outputmetadatawriter(scene_id,band_ids,class_ids,resolution=self.resolution)
+        #Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path,scene_id,patch_ids)
+        #Save data
+        self.datasaver(band_patches,mask_patches,self.descriptors,output_paths)
 
+        #Save metadata
+        self.metadatasaver(self.output_metadata,output_paths)
 
 if __name__ == '__main__':
     import shutil
@@ -592,7 +391,7 @@ if __name__ == '__main__':
         'L8Biome96': L8Biome96,
         'L8SPARCS80': L8SPARCS80,
         'L7Irish206': L7Irish206,
-        'S2CESBIO': S2CESBIO,
+        'S2CESBIO38': S2CESBIO38
     }
 
     arg_parser = argparse.ArgumentParser(
@@ -614,8 +413,8 @@ if __name__ == '__main__':
                             help='Size of each output patch', default=256)
     arg_parser.add_argument('-t', '--nodata_threshold', type=float,
                             help='Fraction of patch that can have no-data values and still be used',
-                            default=0.5)
-    arg_parser.add_argument('-b', '--bands', type=str,
+                            default=None)
+    arg_parser.add_argument('-b', '--selected_band_ids', type=str,
                             help='List of bands to be used', default='None')
     arg_parser.add_argument('-s', '--stride', type=int, default=None,
                             help = 'Stride used for patch extraction. If this is smaller than patch_size, '
