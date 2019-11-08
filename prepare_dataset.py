@@ -299,26 +299,27 @@ class S2CESBIO38(Dataset):
     def _band_imread(filename):
         return glymur.Jp2k(filename)[:]
 
-    def scene_present(self,scene_id):
+    def download_present(self,scene_id):
         for root,dirs,paths in os.walk(scene_id):
             for dir in dirs:
-                if dir.endswith('.SAFE') or dir.endswith('.SAFE/'):
+                if dir.endswith('IMG_DATA') or dir.endswith('IMG_DATA/'):
                     return True
         return False
 
     def download_scenes(self):
-        scene_ids = self.get_scenes()
+        scene_ids = self.get_scenes(only_downloaded=False)
         with open(join(abspath(dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
             try:
                 self.product_id_dict = yaml.safe_load(f)
             except yaml.YAMLError as exc:
                 raise exc
         for scene in scene_ids:
-            if not self.scene_present(scene):
+            if not self.download_present(os.path.join(self.in_path,scene)):
                 self.download_scene(scene)
 
     def download_scene(self,scene_id):
-        with open(os.path.join(self.in_path,scene_id,'used_parameters.json'), 'r') as f:
+        scene_dir = os.path.join(self.in_path,scene_id)
+        with open(os.path.join(scene_dir,'used_parameters.json'), 'r') as f:
             scene_parameters = json.load(f)
         original_cloudy_product_id = scene_parameters['cloudy_product_name']
         downloadable_product_id = self.product_id_dict[original_cloudy_product_id]
@@ -327,16 +328,31 @@ class S2CESBIO38(Dataset):
             self.sensat_passwd   = getpass.getpass('Please enter SentinelHub password: ')
             self.api = SentinelAPI(self.sensat_username, self.sensat_passwd)
         prod = self.api.query(raw=downloadable_product_id)
-        self.api.download_all(prod,directory_path = os.path.join(self.in_path,scene_id))
-        with ZipFile(os.path.join(self.in_path,scene_id,downloadable_product_id+'.zip'),'r') as f:
-            f.extractall(os.path.join(self.in_path,scene_id))
+        self.api.download_all(prod,directory_path = scene_dir)
 
 
-    def get_scenes(self):
+        os.makedirs(os.path.join(scene_dir,'IMG_DATA'))
+        with ZipFile(os.path.join(scene_dir,downloadable_product_id+'.zip'),'r') as zf:
+            # f.extractall(scene_dir)
+
+            for file in zf.namelist():
+
+                if 'IMG_DATA' in file and not (file.endswith('IMG_DATA') or file.endswith('IMG_DATA/')):
+                    file_data = zf.read(file)
+                    with open(os.path.join(scene_dir, 'IMG_DATA',os.path.basename(file)), "wb") as fout:
+                        fout.write(file_data)
+
+        os.remove(os.path.join(scene_dir,downloadable_product_id+'.zip'))
+
+
+    def get_scenes(self,only_downloaded=True):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
             if any(['classification_map' in path for path in paths]):
-                scenes.append(root.replace(self.in_path+os.sep,''))
+                if only_downloaded and self.download_present(root):
+                    scenes.append(root.replace(self.in_path+os.sep,''))
+                elif not only_downloaded:
+                    scenes.append(root.replace(self.in_path+os.sep,''))
         return scenes
 
     def process_scene(self,scene_id):
