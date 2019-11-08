@@ -952,9 +952,8 @@ class SlidingWindowSplitter:
         patch_ids : list
             Identifiers for each patch based on x/y location.
         """
-        # BUG: n_x,n_y are defined by //patch_size but should be function of stride.
-        n_x = bands.shape[0] // self.patch_size
-        n_y = bands.shape[1] // self.patch_size
+        n_x = (bands.shape[0]-self.patch_size) // self.stride + 1
+        n_y = (bands.shape[1]-self.patch_size) // self.stride + 1
         step_x = self.stride
         step_y = self.stride
         #pre-allocated for efficiency
