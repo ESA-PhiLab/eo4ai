@@ -484,7 +484,7 @@ class SingleFileBandLoader:
             bands = [bands[...,i] for i in range(bands.shape[-1])]
             return bands, band_ids
         else:
-            selected_idxs = [band_ids.index(band_id) for band_id in selected_bands]
+            selected_idxs = [band_ids.index(band_id) for band_id in selected_band_ids]
 
             # Select bands and convert to list
             bands = [bands[...,idx] for idx in selected_idxs]
