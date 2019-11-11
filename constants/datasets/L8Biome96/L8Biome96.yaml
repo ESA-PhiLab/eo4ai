@@ -3,7 +3,7 @@ spacecraft_id: Landsat8
 bands:
   B1:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 443
@@ -12,7 +12,7 @@ bands:
         descriptive_name: 'Aerosol'
   B2:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 482
@@ -22,7 +22,7 @@ bands:
 
   B3:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 562
@@ -32,7 +32,7 @@ bands:
 
   B4:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 655
@@ -42,7 +42,7 @@ bands:
 
   B5:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 865
@@ -52,7 +52,7 @@ bands:
 
   B6:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 1609
@@ -62,7 +62,7 @@ bands:
 
   B7:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 2201
@@ -72,7 +72,7 @@ bands:
 
   B8:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 590
@@ -82,7 +82,7 @@ bands:
 
   B9:
         type: TOA Reflectance
-        gain: 0.0002
+        gain: 0.00002
         offset: -0.1
         solar_correction: True
         band_centre: 1374
