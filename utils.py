@@ -698,11 +698,7 @@ class Landsat8Normaliser(LandsatNormaliser):
         offset = bm['offset']
 
         nodata = band == 0
-        plt.hist(band.ravel(),bins=200)
-        plt.show()
         band = band * gain + offset
-        plt.hist(band.ravel(),bins=200)
-        plt.show()
         if bm['type'] == 'TOA Normalised Brightness Temperature':
             band = (bm['K2']  / np.log(bm['K1'] / band + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
