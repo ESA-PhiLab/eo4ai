@@ -6,11 +6,12 @@ from abc import ABC, abstractmethod
 import argparse
 from ast import literal_eval
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import getpass
 from glob import glob
 from itertools import repeat
 import math
+import traceback
 
 import cv2 as cv
 import yaml
@@ -69,11 +70,21 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        with ThreadPoolExecutor(self.jobs) as pool:
-            pool.map(self.process_scene, scenes)
-        # for scene in scenes:
-            # self.process_scene(scene)
+        with ProcessPoolExecutor(self.jobs) as pool:
+            pool.map(self._save_process_scene, scenes)
+#         for scene in scenes:
+#             self._save_process_scene(scene)
         #self.dump_README() # TODO
+        
+        
+    def _save_process_scene(self, scene):
+        print('PROCESSING:', scene)
+        try:
+            self.process_scene(scene)
+        except Exception as err:
+            print(
+                "".join(traceback.format_tb(err.__traceback__))
+            )
 
     def dump_README(self):
         # TODO

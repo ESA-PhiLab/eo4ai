@@ -703,8 +703,6 @@ class Landsat8Normaliser(LandsatNormaliser):
             band = (bm['K2']  / np.log(bm['K1'] / band + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
 
-
-
         if bm.get('solar_correction', False):
             band /= math.sin(float(self.scene_metadata['SUN_ELEVATION'])*math.pi/180)
 
@@ -890,14 +888,13 @@ class ImageMaskNumpySaver(Saver):
         image_path = os.path.join(out_path,'image.npy')
         mask_path = os.path.join(out_path,'mask.npy')
         if not self.overwrite:
-
             if not os.exists(image_path):
-                np.save(image_path,image)
+                np.save(image_path,image.astype(np.float32))
             if not os.exists(mask_path):
-                np.save(mask_path,mask)
+                np.save(mask_path,mask.astype(bool))
         else:
-            np.save(image_path,image)
-            np.save(mask_path,mask)
+            np.save(image_path,image.astype(np.float32))
+            np.save(mask_path,mask.astype(bool))
 
 class ImageMaskDescriptorNumpySaver(ImageMaskNumpySaver):
     def __call__(self,images,masks,descriptors,out_paths):
