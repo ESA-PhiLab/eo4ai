@@ -237,7 +237,8 @@ class L7Irish206(Dataset):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
             if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('mask2019.tif') for path in paths]):
-                scenes.append(root.replace(self.in_path+os.sep,''))
+                #Different OS's seem to handle this differently, so need two replace statements. TODO: Investigate alternative patterns
+                scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
@@ -350,9 +351,9 @@ class S2CESBIO38(Dataset):
         for root,dirs,paths in os.walk(self.in_path):
             if any(['classification_map' in path for path in paths]):
                 if only_downloaded and self.download_present(root):
-                    scenes.append(root.replace(self.in_path+os.sep,''))
+                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
                 elif not only_downloaded:
-                    scenes.append(root.replace(self.in_path+os.sep,''))
+                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
