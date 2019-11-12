@@ -5,39 +5,22 @@ Script for transforming original datasets to OCMARTA be conform.
 from abc import ABC, abstractmethod
 import argparse
 from ast import literal_eval
-from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import getpass
-from glob import glob
-from itertools import repeat
-import math
-
-import cv2 as cv
-import yaml
-import spectral as spy
-import tifffile as tif
-import numpy as np
-import sys
-import os
-from os.path import join, dirname, abspath, split
-import ast
-from skimage import transform
-from skimage.io import imread
 import glymur
 import json
+import numpy as np
+import os
+from sentinelsat import SentinelAPI
+import spectral as spy
+import sys
+import tifffile as tif
+import traceback
+import yaml
 from zipfile import ZipFile
 
 import utils
 
-import types
-
-from sentinelsat import SentinelAPI
-
-class ReadingError(Exception):
-    def __init__(self, message):
-
-        # Call the base class constructor with the parameters it needs
-        super(ReadingError, self).__init__(message)
 
 
 class Dataset(ABC):
@@ -69,11 +52,25 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        with ThreadPoolExecutor(self.jobs) as pool:
-            pool.map(self.process_scene, scenes)
-        # for scene in scenes:
-            # self.process_scene(scene)
+        if self.jobs < 2:
+            for scene in scenes:
+                self._save_process_scene(scene)
+        else:
+            with ProcessPoolExecutor(self.jobs) as pool:
+                pool.map(self._save_process_scene, scenes)
         #self.dump_README() # TODO
+
+
+    def _save_process_scene(self, scene):
+        print('PROCESSING:', scene)
+        try:
+            self.process_scene(scene)
+        except Exception as err:
+            print(
+                'ERROR while processing', scene,
+                str(err),
+                ''.join(traceback.format_tb(err.__traceback__))
+            )
 
     def dump_README(self):
         # TODO
@@ -89,7 +86,7 @@ class Dataset(ABC):
 
     @staticmethod
     def get_dataset_metadata(dataset_id):
-        with open(join(abspath(dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
+        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
             try:
                 return yaml.safe_load(stream)
             except yaml.YAMLError as exc:
@@ -101,7 +98,7 @@ class L8SPARCS80(Dataset):
         super().__init__(dataset_id='L8SPARCS80', **kwargs)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
         self.bandloader = utils.SingleFileBandLoader(self.dataset_metadata)
-        self.maskloader = utils.ImageLoader()
+        self.maskloader = utils.ImageLoader(self.dataset_metadata)
         self.metadataloader = utils.LandsatMTLLoader()
         self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
         self.encoder = utils.MapByColourEncoder(self.dataset_metadata)
@@ -125,11 +122,12 @@ class L8SPARCS80(Dataset):
 
         #Load bands, mask and metadata
         bands,band_ids = self.bandloader(band_file,'_data',selected_band_ids=self.selected_band_ids)
-        mask = self.maskloader(mask_file)
+        # TODO: Horrible hack to fix RGBA coming from different skimage or OS versions
+        mask = self.maskloader(mask_file)[..., :3]
         self.scene_metadata = self.metadataloader(scene_metadata_file)
 
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)
@@ -158,7 +156,7 @@ class L8Biome96(Dataset):
         self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
         self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
-        self.maskloader = utils.ImageLoader(imread=self._mask_imread)
+        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=self._mask_imread)
         self.metadataloader = utils.LandsatMTLLoader()
         self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
         self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
@@ -179,7 +177,7 @@ class L8Biome96(Dataset):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
             if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('_fixedmask.hdr') for path in paths]):
-                scenes.append(root.replace(self.in_path+os.sep,''))
+                scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
@@ -192,7 +190,7 @@ class L8Biome96(Dataset):
         mask = self.maskloader(mask_file)
         self.scene_metadata = self.metadataloader(scene_metadata_file)
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)
@@ -220,7 +218,7 @@ class L7Irish206(Dataset):
         self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
         self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
-        self.maskloader = utils.ImageLoader(imread=tif.imread)
+        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=tif.imread)
         self.metadataloader = utils.LandsatMTLLoader()
         self.normaliser = utils.Landsat7Pre2011Normaliser(self.dataset_metadata)
         self.encoder = utils.L7IrishEncoder(self.dataset_metadata)
@@ -237,7 +235,8 @@ class L7Irish206(Dataset):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
             if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('mask2019.tif') for path in paths]):
-                scenes.append(root.replace(self.in_path+os.sep,''))
+                #Different OS's seem to handle this differently, so need two replace statements. TODO: Investigate alternative patterns
+                scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
@@ -255,7 +254,7 @@ class L7Irish206(Dataset):
         mask,class_ids = self.encoder(mask,bands)
 
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,self.scene_metadata)
+        bands = self.normaliser(bands,band_ids,self.scene_metadata,nodata_as=0)
 
         #Resize bands and mask
         bands,mask = self.resizer(bands,band_ids,mask,self.resolution)
@@ -279,7 +278,7 @@ class S2CESBIO38(Dataset):
         self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = utils.FileFinderBySubStrings(self.in_path)
         self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=self._band_imread)
-        self.maskloader = utils.ImageLoader(imread=tif.imread)
+        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=tif.imread)
         self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
         self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
         self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
@@ -308,7 +307,7 @@ class S2CESBIO38(Dataset):
 
     def download_scenes(self):
         scene_ids = self.get_scenes(only_downloaded=False)
-        with open(join(abspath(dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
+        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
             try:
                 self.product_id_dict = yaml.safe_load(f)
             except yaml.YAMLError as exc:
@@ -350,9 +349,9 @@ class S2CESBIO38(Dataset):
         for root,dirs,paths in os.walk(self.in_path):
             if any(['classification_map' in path for path in paths]):
                 if only_downloaded and self.download_present(root):
-                    scenes.append(root.replace(self.in_path+os.sep,''))
+                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
                 elif not only_downloaded:
-                    scenes.append(root.replace(self.in_path+os.sep,''))
+                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
@@ -363,7 +362,7 @@ class S2CESBIO38(Dataset):
         bands,band_ids = self.bandloader(band_file_register,selected_band_ids=self.selected_band_ids)
         mask = self.maskloader(mask_file)
         #Normalise band values
-        bands = self.normaliser(bands,band_ids,None)
+        bands = self.normaliser(bands,band_ids,None,nodata_as=0)
 
         #Encode mask
         mask,class_ids = self.encoder(mask)

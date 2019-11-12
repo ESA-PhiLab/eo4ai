@@ -1,12 +1,11 @@
-import numpy as np
 from abc import abstractmethod, ABC
+import cv2
+import json
 import os
 import math
-import cv2
+import numpy as np
 import skimage.io
-import json
-import spectral as spy
-import glymur
+
 
 #---ENCODERS---
 
@@ -385,8 +384,8 @@ class BandRegisterFinder:
 
 #---LOADERS---
 
-class MultiFileBandLoader:
-    """Loader for band data when contained in multiple files.
+class ImageLoader:
+    """Loader for single images.
 
     Attributes
     ----------
@@ -401,6 +400,24 @@ class MultiFileBandLoader:
             self.imread = skimage.io.imread
         else:
             self.imread = imread
+
+    def __call__(self,path):
+        """Loads image from file.
+
+        Parameters
+        ----------
+        path : str
+            Path to image file.
+
+        Returns
+        -------
+        np.ndarray
+            Image data loaded from path.
+        """
+        return self.imread(path)
+
+class MultiFileBandLoader(ImageLoader):
+    """Loader for band data when contained in multiple files."""
 
     def __call__(self,band_file_register,selected_band_ids=None):
         """Loads all required band files
@@ -440,22 +457,8 @@ class MultiFileBandLoader:
             bands = [band for i,band in enumerate(bands) if i in selected_idxs]
             return bands, selected_band_ids
 
-class SingleFileBandLoader:
-    """Loader for band data when contained in single file.
-
-    Attributes
-    ----------
-    dataset_metadata : dict
-        Dataset-specific values and information.
-    imread : func
-        Function that reads some image file.
-    """
-    def __init__(self,dataset_metadata,imread=None):
-        self.dataset_metadata = dataset_metadata
-        if imread is None:
-            self.imread = skimage.io.imread
-        else:
-            self.imread = imread
+class SingleFileBandLoader(ImageLoader):
+    """Loader for band data when contained in single file."""
 
     def __call__(self,path,file_id,selected_band_ids=None):
         """Loads band data from file and then selects bands.
@@ -490,34 +493,7 @@ class SingleFileBandLoader:
             bands = [bands[...,idx] for idx in selected_idxs]
             return bands, selected_band_ids
 
-class ImageLoader:
-    """Loader for single images.
 
-    Attributes
-    ----------
-    imread : func
-        Function that reads some image file.
-    """
-    def __init__(self,imread=None):
-        if imread is None:
-            self.imread = skimage.io.imread
-        else:
-            self.imread = imread
-
-    def __call__(self,path):
-        """Loads image from file.
-
-        Parameters
-        ----------
-        path : str
-            Path to image file.
-
-        Returns
-        -------
-        np.ndarray
-            Image data loaded from path.
-        """
-        return self.imread(path)
 
 class SimpleSpectralDescriptorsLoader:
     """Loader for simple spectral descriptors.
@@ -640,7 +616,7 @@ class LandsatNormaliser(ABC):
         self.dataset_metadata = dataset_metadata
         self.scene_metadata = None
 
-    def __call__(self,bands,band_ids,scene_metadata):
+    def __call__(self,bands,band_ids,scene_metadata,nodata_as=None):
         """Normalises all bands based on metadata.
 
         Parameters
@@ -661,7 +637,7 @@ class LandsatNormaliser(ABC):
         if isinstance(band_ids,str): #Single-Band mode
             band_ids = [band_ids]
         for idx,band_id in enumerate(band_ids):
-            bands[idx] = self._normalise_band(bands[idx],band_id,scene_metadata)
+            bands[idx] = self._normalise_band(bands[idx],band_id,scene_metadata,nodata_as=nodata_as)
         return bands
 
     @abstractmethod
@@ -670,7 +646,7 @@ class LandsatNormaliser(ABC):
 
 class Landsat8Normaliser(LandsatNormaliser):
     """Normaliser for Landsat 8 data,to convert to TOA units."""
-    def _normalise_band(self,band,band_id,scene_metadata):
+    def _normalise_band(self,band,band_id,scene_metadata,nodata_as=None):
         """Normalises any Landsat 8 band into TOA units
 
         Parameters
@@ -681,6 +657,9 @@ class Landsat8Normaliser(LandsatNormaliser):
             Identifier for band being normalised.
         scene_metadata : dict
             Scene-specific Landsat metadata values.
+        nodata_as : float, optional
+            Used to set nodata as given value, left as is if unspecified (default None)
+
 
         Returns
         -------
@@ -692,20 +671,22 @@ class Landsat8Normaliser(LandsatNormaliser):
         gain = bm['gain']
         offset = bm['offset']
 
+        nodata = band == 0
         band = band * gain + offset
-
         if bm['type'] == 'TOA Normalised Brightness Temperature':
-            band = (bm['K2']  / np.log(bm['K2'] / band + 1))
+            band = (bm['K2']  / np.log(bm['K1'] / band + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
 
         if bm.get('solar_correction', False):
             band /= math.sin(float(self.scene_metadata['SUN_ELEVATION'])*math.pi/180)
 
+        if nodata_as is not None:
+            band[nodata] = nodata_as
         return band
 
 class Landsat7Pre2011Normaliser(LandsatNormaliser):
     """Normaliser for Landsat7 Pre-2011 data format, to convert to TOA units."""
-    def _normalise_band(self,band,band_id,scene_metadata):
+    def _normalise_band(self,band,band_id,scene_metadata,nodata_as=None):
         """Normalises any Landsat 7 pre-2011 band into TOA units
 
         Parameters
@@ -716,6 +697,9 @@ class Landsat7Pre2011Normaliser(LandsatNormaliser):
             Identifier for band being normalised.
         scene_metadata : dict
             Scene-specific Landsat metadata values.
+        nodata_as : float, optional
+            Used to set nodata as given value, left as is if unspecified (default None)
+
 
         Returns
         -------
@@ -736,7 +720,7 @@ class Landsat7Pre2011Normaliser(LandsatNormaliser):
         L_MIN = bm['L_MIN']
         if isinstance(L_MIN,str):
             L_MIN = self.scene_metadata[L_MIN]
-
+        nodata = band == 0
         radiance = ((L_MAX-L_MIN)/(QCAL_MAX-QCAL_MIN))*(band-QCAL_MIN) + L_MIN
 
         if bm['type'] == 'TOA Reflectance':
@@ -747,8 +731,12 @@ class Landsat7Pre2011Normaliser(LandsatNormaliser):
                 band /= math.sin(float(self.scene_metadata['SUN_ELEVATION'])*math.pi/180)
 
         if bm['type'] == 'TOA Normalised Brightness Temperature':
-            band = (bm['K2']  / np.log(bm['K2'] / radiance + 1))
+            band = (bm['K2']  / np.log(bm['K1'] / radiance + 1))
             band = (band - bm['MINIMUM_BT']) / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
+
+        if nodata_as is not None:
+            band[nodata] = nodata_as
+
         return band
 
 #---ORGANISERS---
@@ -874,14 +862,13 @@ class ImageMaskNumpySaver(Saver):
         image_path = os.path.join(out_path,'image.npy')
         mask_path = os.path.join(out_path,'mask.npy')
         if not self.overwrite:
-
             if not os.exists(image_path):
-                np.save(image_path,image)
+                np.save(image_path,image.astype(np.float32))
             if not os.exists(mask_path):
-                np.save(mask_path,mask)
+                np.save(mask_path,mask.astype(bool))
         else:
-            np.save(image_path,image)
-            np.save(mask_path,mask)
+            np.save(image_path,image.astype(np.float32))
+            np.save(mask_path,mask.astype(bool))
 
 class ImageMaskDescriptorNumpySaver(ImageMaskNumpySaver):
     def __call__(self,images,masks,descriptors,out_paths):
