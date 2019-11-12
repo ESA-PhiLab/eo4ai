@@ -70,10 +70,12 @@ class Dataset(ABC):
 
     def process(self):
         scenes = self.get_scenes()
-        with ProcessPoolExecutor(self.jobs) as pool:
-            pool.map(self._save_process_scene, scenes)
-#         for scene in scenes:
-#             self._save_process_scene(scene)
+        if self.jobs < 2:
+            for scene in scenes:
+                self._save_process_scene(scene)
+        else:
+            with ProcessPoolExecutor(self.jobs) as pool:
+                pool.map(self._save_process_scene, scenes)
         #self.dump_README() # TODO
         
         
@@ -83,7 +85,9 @@ class Dataset(ABC):
             self.process_scene(scene)
         except Exception as err:
             print(
-                "".join(traceback.format_tb(err.__traceback__))
+                'ERROR while processing', scene, 
+                str(err),
+                ''.join(traceback.format_tb(err.__traceback__))
             )
 
     def dump_README(self):
@@ -136,7 +140,8 @@ class L8SPARCS80(Dataset):
 
         #Load bands, mask and metadata
         bands,band_ids = self.bandloader(band_file,'_data',selected_band_ids=self.selected_band_ids)
-        mask = self.maskloader(mask_file)
+        # TODO: Horrible hack to fix RGBA coming from different skimage or OS versions
+        mask = self.maskloader(mask_file)[..., :3]
         self.scene_metadata = self.metadataloader(scene_metadata_file)
 
         #Normalise band values
@@ -190,7 +195,7 @@ class L8Biome96(Dataset):
         scenes = []
         for root,dirs,paths in os.walk(self.in_path):
             if any(['_MTL' in path for path in paths]) and any([path.lower().endswith('_fixedmask.hdr') for path in paths]):
-                scenes.append(root.replace(self.in_path+os.sep,''))
+                scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
         return scenes
 
     def process_scene(self,scene_id):
