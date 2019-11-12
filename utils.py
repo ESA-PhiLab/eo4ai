@@ -384,8 +384,8 @@ class BandRegisterFinder:
 
 #---LOADERS---
 
-class MultiFileBandLoader:
-    """Loader for band data when contained in multiple files.
+class ImageLoader:
+    """Loader for single images.
 
     Attributes
     ----------
@@ -400,6 +400,24 @@ class MultiFileBandLoader:
             self.imread = skimage.io.imread
         else:
             self.imread = imread
+
+    def __call__(self,path):
+        """Loads image from file.
+
+        Parameters
+        ----------
+        path : str
+            Path to image file.
+
+        Returns
+        -------
+        np.ndarray
+            Image data loaded from path.
+        """
+        return self.imread(path)
+
+class MultiFileBandLoader(ImageLoader):
+    """Loader for band data when contained in multiple files."""
 
     def __call__(self,band_file_register,selected_band_ids=None):
         """Loads all required band files
@@ -439,22 +457,8 @@ class MultiFileBandLoader:
             bands = [band for i,band in enumerate(bands) if i in selected_idxs]
             return bands, selected_band_ids
 
-class SingleFileBandLoader:
-    """Loader for band data when contained in single file.
-
-    Attributes
-    ----------
-    dataset_metadata : dict
-        Dataset-specific values and information.
-    imread : func
-        Function that reads some image file.
-    """
-    def __init__(self,dataset_metadata,imread=None):
-        self.dataset_metadata = dataset_metadata
-        if imread is None:
-            self.imread = skimage.io.imread
-        else:
-            self.imread = imread
+class SingleFileBandLoader(ImageLoader):
+    """Loader for band data when contained in single file."""
 
     def __call__(self,path,file_id,selected_band_ids=None):
         """Loads band data from file and then selects bands.
@@ -489,34 +493,7 @@ class SingleFileBandLoader:
             bands = [bands[...,idx] for idx in selected_idxs]
             return bands, selected_band_ids
 
-class ImageLoader:
-    """Loader for single images.
 
-    Attributes
-    ----------
-    imread : func
-        Function that reads some image file.
-    """
-    def __init__(self,imread=None):
-        if imread is None:
-            self.imread = skimage.io.imread
-        else:
-            self.imread = imread
-
-    def __call__(self,path):
-        """Loads image from file.
-
-        Parameters
-        ----------
-        path : str
-            Path to image file.
-
-        Returns
-        -------
-        np.ndarray
-            Image data loaded from path.
-        """
-        return self.imread(path)
 
 class SimpleSpectralDescriptorsLoader:
     """Loader for simple spectral descriptors.
