@@ -22,12 +22,6 @@ from zipfile import ZipFile
 import utils
 
 
-class ReadingError(Exception):
-    def __init__(self, message):
-
-        # Call the base class constructor with the parameters it needs
-        super(ReadingError, self).__init__(message)
-
 
 class Dataset(ABC):
     """Base class for datasets.
