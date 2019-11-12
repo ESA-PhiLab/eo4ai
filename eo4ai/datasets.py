@@ -139,7 +139,7 @@ class L8Biome96(Dataset):
         super().__init__(dataset_id='L8Biome96', **kwargs)
         self.bandregisterfinder = filefinders.BandRegisterFinder(self.dataset_metadata,self.in_path)
         self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
-        self.bandloader = laoders.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
+        self.bandloader = loaders.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
         self.maskloader = loaders.ImageLoader(self.dataset_metadata,imread=self._mask_imread)
         self.metadataloader = loaders.LandsatMTLLoader()
         self.normaliser = normalisers.Landsat8Normaliser(self.dataset_metadata)
