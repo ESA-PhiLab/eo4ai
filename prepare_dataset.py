@@ -5,34 +5,22 @@ Script for transforming original datasets to OCMARTA be conform.
 from abc import ABC, abstractmethod
 import argparse
 from ast import literal_eval
-from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 import getpass
-from glob import glob
-from itertools import repeat
-import math
-import traceback
-
-import cv2 as cv
-import yaml
-import spectral as spy
-import tifffile as tif
-import numpy as np
-import sys
-import os
-from os.path import join, dirname, abspath, split
-import ast
-from skimage import transform
-from skimage.io import imread
 import glymur
 import json
+import numpy as np
+import os
+from sentinelsat import SentinelAPI
+import spectral as spy
+import sys
+import tifffile as tif
+import traceback
+import yaml
 from zipfile import ZipFile
 
 import utils
 
-import types
-
-from sentinelsat import SentinelAPI
 
 class ReadingError(Exception):
     def __init__(self, message):
@@ -77,15 +65,15 @@ class Dataset(ABC):
             with ProcessPoolExecutor(self.jobs) as pool:
                 pool.map(self._save_process_scene, scenes)
         #self.dump_README() # TODO
-        
-        
+
+
     def _save_process_scene(self, scene):
         print('PROCESSING:', scene)
         try:
             self.process_scene(scene)
         except Exception as err:
             print(
-                'ERROR while processing', scene, 
+                'ERROR while processing', scene,
                 str(err),
                 ''.join(traceback.format_tb(err.__traceback__))
             )
@@ -104,7 +92,7 @@ class Dataset(ABC):
 
     @staticmethod
     def get_dataset_metadata(dataset_id):
-        with open(join(abspath(dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
+        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
             try:
                 return yaml.safe_load(stream)
             except yaml.YAMLError as exc:
@@ -325,7 +313,7 @@ class S2CESBIO38(Dataset):
 
     def download_scenes(self):
         scene_ids = self.get_scenes(only_downloaded=False)
-        with open(join(abspath(dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
+        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
             try:
                 self.product_id_dict = yaml.safe_load(f)
             except yaml.YAMLError as exc:

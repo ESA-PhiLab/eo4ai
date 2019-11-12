@@ -1,14 +1,11 @@
-import numpy as np
 from abc import abstractmethod, ABC
+import cv2
+import json
 import os
 import math
-import cv2
+import numpy as np
 import skimage.io
-import json
-import spectral as spy
-import glymur
 
-import matplotlib.pyplot as plt
 
 #---ENCODERS---
 
