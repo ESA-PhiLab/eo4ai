@@ -209,7 +209,7 @@ class L7Irish206(Dataset):
         self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
         self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
         self.resizer = resizers.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
-        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride,filters=[filefinders.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride,filters=[filters.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
         self.outputmetadatawriter = writers.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
         self.outputorganiser = misc.BySceneAndPatchOrganiser()
         self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
