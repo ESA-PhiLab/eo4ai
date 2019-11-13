@@ -1,6 +1,9 @@
 # *---WORK IN PROGRESS---*
 
 # EO4AI
+
+[![Build Status](https://travis-ci.org/ESA-PhiLab/eo4ai.svg?branch=master)](https://travis-ci.org/ESA-PhiLab/eo4ai)
+
 ##### *Earth Observation preprocessing tools for AI and machine learning applications*
 
 This project provides easy-to-use tools for preprocessing datasets for image segmentation tasks in Earth Observation. We hope to remove the barrier to entry for data scientists in EO, by reducing the amount of time spent on reformatting datasets. These EO datasets are frequently characterised by very large image formats, high bit-depths, non-standard label formats, pixel values in Digital Number, varied naming conventions, and other dataset-specific peculiarities which slow down development of AI applications.
