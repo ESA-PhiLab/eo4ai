@@ -1,10 +1,12 @@
 import os
 
+
 class BySceneAndPatchOrganiser:
     """Organiser for output files based on scenes and patch ids."""
     def __init__(self):
         pass
-    def __call__(self,out_path,scene_id,patch_ids):
+
+    def __call__(self, out_path, scene_id, patch_ids):
         """Organises output directory structure for all samples taken from a scene.
 
         Parameters
@@ -21,4 +23,7 @@ class BySceneAndPatchOrganiser:
         list
             Output directories corresponding to each entry in patch_ids.
         """
-        return [os.path.join(out_path,scene_id,patch_id) for patch_id in patch_ids]
+        return [
+               os.path.join(out_path, scene_id, patch_id)
+               for patch_id in patch_ids
+               ]
