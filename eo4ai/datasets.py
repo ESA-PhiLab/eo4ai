@@ -1,10 +1,4 @@
-"""
-Script for transforming original datasets to OCMARTA be conform.
-
-"""
 from abc import ABC, abstractmethod
-import argparse
-from ast import literal_eval
 from concurrent.futures import ProcessPoolExecutor
 import getpass
 import glymur
@@ -19,36 +13,32 @@ import traceback
 import yaml
 from zipfile import ZipFile
 
-import utils
-
+from eo4ai.utils import encoders, filefinders, filters, loaders, misc, normalisers,\
+                        resizers, savers, splitters, writers
 
 
 class Dataset(ABC):
     """Base class for datasets.
     """
-    def __init__(self, dataset_id, in_path, generate_metadata, patch_size, stride, jobs, resolution, out_path, nodata_threshold, selected_band_ids):
-        self.in_path = in_path
-        self.patch_size = patch_size
-        self.stride = stride
-        if self.stride is None:
-            self.stride = self.patch_size
+    def __init__(self, dataset_id, jobs, **kwargs):
+        self.dataset_id = dataset_id
         self.jobs = jobs
-        self.resolution = resolution
-        self.out_path = out_path
-        self.nodata_threshold = nodata_threshold
-        self.generate_metadata = generate_metadata
-
-        # We have two metadata variables: dataset and scene metadata.
-        # scene_metadata should change for each new tile.
-        self.dataset_metadata = self.get_dataset_metadata(dataset_id)
-        self.scene_metadata = None
-
-        # Convert band ids into a list:
-        self.selected_band_ids = literal_eval(selected_band_ids)
-
-        # TODO
-        self.README_config = locals()
-
+        for k,v in kwargs.items():
+            setattr(self,k,v)
+        metadata_file = \
+            os.path.join(
+                os.path.abspath(os.path.dirname(__file__)),
+                '..',
+                'constants',
+                'datasets',
+                self.dataset_id,
+                self.dataset_id + '.yaml'
+            )
+        with open(metadata_file, 'r') as stream:
+            try:
+                self.dataset_metadata = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                raise exc
 
     def process(self):
         scenes = self.get_scenes()
@@ -84,32 +74,26 @@ class Dataset(ABC):
     def process_scene(self):
         pass
 
-    @staticmethod
-    def get_dataset_metadata(dataset_id):
-        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets',dataset_id, dataset_id + '.yaml'), 'r') as stream:
-            try:
-                return yaml.safe_load(stream)
-            except yaml.YAMLError as exc:
-                raise exc
+
 
 class L8SPARCS80(Dataset):
 
     def __init__(self,**kwargs):
         super().__init__(dataset_id='L8SPARCS80', **kwargs)
-        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
-        self.bandloader = utils.SingleFileBandLoader(self.dataset_metadata)
-        self.maskloader = utils.ImageLoader(self.dataset_metadata)
-        self.metadataloader = utils.LandsatMTLLoader()
-        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
-        self.encoder = utils.MapByColourEncoder(self.dataset_metadata)
-        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
+        self.bandloader = loaders.SingleFileBandLoader(self.dataset_metadata)
+        self.maskloader = loaders.ImageLoader(self.dataset_metadata)
+        self.metadataloader = loaders.LandsatMTLLoader()
+        self.normaliser = normalisers.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = encoders.MapByColourEncoder(self.dataset_metadata)
+        self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
         self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
-        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True)
-        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride)
-        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
-        self.outputorganiser = utils.BySceneAndPatchOrganiser()
-        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
-        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.resizer = resizers.BandsMaskResizer(self.dataset_metadata,to_array=True)
+        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride)
+        self.outputmetadatawriter = writers.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = misc.BySceneAndPatchOrganiser()
+        self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
 
     def get_scenes(self):
         return list(set([file[:21] for file in os.listdir(self.in_path)]))
@@ -153,21 +137,21 @@ class L8SPARCS80(Dataset):
 class L8Biome96(Dataset):
     def __init__(self, **kwargs):
         super().__init__(dataset_id='L8Biome96', **kwargs)
-        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
-        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
-        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
-        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=self._mask_imread)
-        self.metadataloader = utils.LandsatMTLLoader()
-        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
-        self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
-        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.bandregisterfinder = filefinders.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
+        self.bandloader = loaders.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
+        self.maskloader = loaders.ImageLoader(self.dataset_metadata,imread=self._mask_imread)
+        self.metadataloader = loaders.LandsatMTLLoader()
+        self.normaliser = normalisers.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = encoders.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
         self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
-        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
-        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
-        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
-        self.outputorganiser = utils.BySceneAndPatchOrganiser()
-        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
-        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.resizer = resizers.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride,filters=[filters.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = writers.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = misc.BySceneAndPatchOrganiser()
+        self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
 
     @staticmethod
     def _mask_imread(filename):
@@ -215,21 +199,21 @@ class L8Biome96(Dataset):
 class L7Irish206(Dataset):
     def __init__(self,**kwargs):
         super().__init__(dataset_id='L7Irish206', **kwargs)
-        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
-        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
-        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
-        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=tif.imread)
-        self.metadataloader = utils.LandsatMTLLoader()
-        self.normaliser = utils.Landsat7Pre2011Normaliser(self.dataset_metadata)
-        self.encoder = utils.L7IrishEncoder(self.dataset_metadata)
-        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.bandregisterfinder = filefinders.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
+        self.bandloader = loaders.MultiFileBandLoader(self.dataset_metadata,imread=tif.imread)
+        self.maskloader = loaders.ImageLoader(self.dataset_metadata,imread=tif.imread)
+        self.metadataloader = loaders.LandsatMTLLoader()
+        self.normaliser = normalisers.Landsat7Pre2011Normaliser(self.dataset_metadata)
+        self.encoder = encoders.L7IrishEncoder(self.dataset_metadata)
+        self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
         self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
-        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
-        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
-        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
-        self.outputorganiser = utils.BySceneAndPatchOrganiser()
-        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
-        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.resizer = resizers.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride,filters=[filters.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = writers.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=True)
+        self.outputorganiser = misc.BySceneAndPatchOrganiser()
+        self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
 
     def get_scenes(self):
         scenes = []
@@ -275,20 +259,20 @@ class L7Irish206(Dataset):
 class S2CESBIO38(Dataset):
     def __init__(self, **kwargs):
         super().__init__(dataset_id='S2CESBIO38', **kwargs)
-        self.bandregisterfinder = utils.BandRegisterFinder(self.dataset_metadata,self.in_path)
-        self.filefinder = utils.FileFinderBySubStrings(self.in_path)
-        self.bandloader = utils.MultiFileBandLoader(self.dataset_metadata,imread=self._band_imread)
-        self.maskloader = utils.ImageLoader(self.dataset_metadata,imread=tif.imread)
-        self.normaliser = utils.Landsat8Normaliser(self.dataset_metadata)
-        self.encoder = utils.MapByValueEncoder(self.dataset_metadata)
-        self.descriptorloader = utils.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
+        self.bandregisterfinder = filefinders.BandRegisterFinder(self.dataset_metadata,self.in_path)
+        self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
+        self.bandloader = loaders.MultiFileBandLoader(self.dataset_metadata,imread=self._band_imread)
+        self.maskloader = loaders.ImageLoader(self.dataset_metadata,imread=tif.imread)
+        self.normaliser = normalisers.Landsat8Normaliser(self.dataset_metadata)
+        self.encoder = encoders.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(self.dataset_metadata)
         self.descriptors = self.descriptorloader(band_ids=self.selected_band_ids)
-        self.resizer = utils.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
-        self.splitter = utils.SlidingWindowSplitter(self.patch_size,self.stride,filters=[utils.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
-        self.outputmetadatawriter = utils.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=False)
-        self.outputorganiser = utils.BySceneAndPatchOrganiser()
-        self.datasaver = utils.ImageMaskDescriptorNumpySaver(overwrite=True)
-        self.metadatasaver = utils.MetadataJsonSaver(overwrite=True)
+        self.resizer = resizers.BandsMaskResizer(self.dataset_metadata,to_array=True,strict=False)
+        self.splitter = splitters.SlidingWindowSplitter(self.patch_size,self.stride,filters=[filters.FilterByMaskClass(threshold = self.nodata_threshold,target_index=0)])
+        self.outputmetadatawriter = writers.LandsatMetadataWriter(self.dataset_metadata,sun_elevation=False)
+        self.outputorganiser = misc.BySceneAndPatchOrganiser()
+        self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
         self.sensat_username = None
         self.sensat_passwd = None
         self.download_scenes()
@@ -307,7 +291,7 @@ class S2CESBIO38(Dataset):
 
     def download_scenes(self):
         scene_ids = self.get_scenes(only_downloaded=False)
-        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
+        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), '..','constants','datasets','S2CESBIO38','sceneIDs.yaml'), 'r') as f:
             try:
                 self.product_id_dict = yaml.safe_load(f)
             except yaml.YAMLError as exc:
@@ -349,9 +333,9 @@ class S2CESBIO38(Dataset):
         for root,dirs,paths in os.walk(self.in_path):
             if any(['classification_map' in path for path in paths]):
                 if only_downloaded and self.download_present(root):
-                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
+                    scenes.append(os.path.dirname(root.replace(self.in_path+os.sep,'').replace(self.in_path,'')))
                 elif not only_downloaded:
-                    scenes.append(root.replace(self.in_path+os.sep,'').replace(self.in_path,''))
+                    scenes.append(os.path.dirname(root.replace(self.in_path+os.sep,'').replace(self.in_path,'')))
         return scenes
 
     def process_scene(self,scene_id):
@@ -382,69 +366,3 @@ class S2CESBIO38(Dataset):
 
         #Save metadata
         self.metadatasaver(self.output_metadata,output_paths)
-
-if __name__ == '__main__':
-    import shutil
-
-    dataset_classes = {
-        'L8Biome96': L8Biome96,
-        'L8SPARCS80': L8SPARCS80,
-        'L7Irish206': L7Irish206,
-        'S2CESBIO38': S2CESBIO38
-    }
-
-    arg_parser = argparse.ArgumentParser(
-        description='Prepare different satellite for use as input into OCMARTA',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    arg_parser.add_argument('in_path',
-                            help='path to original dataset')
-    arg_parser.add_argument('out_path', help='path to output directory')
-    arg_parser.add_argument('-d', '--dataset',
-                            help='Name of dataset. Allowed are: ' + ', '.join(dataset_classes) + '.',
-                            default='L8Biome96', type=str)
-    arg_parser.add_argument('-o', '--overwrite',
-                            help='Allows to overwrite an already existing output directory.',
-                            default=False, type=bool)
-    arg_parser.add_argument('-r', '--resolution', type=float,
-                            help='Resolution of outputs (metres)', default=30)
-    arg_parser.add_argument('-p', '--patch_size', type=int,
-                            help='Size of each output patch', default=256)
-    arg_parser.add_argument('-t', '--nodata_threshold', type=float,
-                            help='Fraction of patch that can have no-data values and still be used',
-                            default=None)
-    arg_parser.add_argument('-b', '--selected_band_ids', type=str,
-                            help='List of bands to be used', default='None')
-    arg_parser.add_argument('-s', '--stride', type=int, default=None,
-                            help = 'Stride used for patch extraction. If this is smaller than patch_size, '
-                                   'patches overlap each other. Default: set to patch_size, so no patches '
-                                   'overlap each other.')
-    arg_parser.add_argument('-g', '--generate_metadata', type=bool,
-                            help='Whether to generate a metadata file for each image/mask pair', default=True)
-    arg_parser.add_argument('-j', '--jobs', type=int,
-                            help='How many parallel jobs should be used to process the data.', default=4)
-
-
-    kwargs = vars(arg_parser.parse_args())
-    print('-' * 79)
-    for key, value in kwargs.items():
-        print('{:20}: {}'.format(key, value))
-    print('-' * 79, '\n')
-
-    overwrite = kwargs.pop('overwrite')
-    if os.path.isdir(kwargs['out_path']):
-        print('Output directory already exists.')
-        if overwrite:
-            print('Start overwriting...')
-        else:
-            print('Abort processing...')
-            sys.exit()
-    else:
-        os.makedirs(kwargs['out_path'])
-
-    # Create the specific dataset object:
-    dataset_class = kwargs.pop('dataset')
-    dataset = dataset_classes[dataset_class](
-        **kwargs
-    )
-    dataset.process()
