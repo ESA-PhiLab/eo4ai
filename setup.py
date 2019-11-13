@@ -6,4 +6,6 @@ setup(
    author='Alistair Francis, John Mrziglod',
    author_email='a.francis.16@ucl.ac.uk',
    packages=['eo4ai'],
+   license='MIT',
+   long_description=open('README.md').read()
 )
