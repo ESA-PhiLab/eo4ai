@@ -35,7 +35,7 @@ class FilterByBandValue:
             self.threshold = 0
 
     def __call__(self, bands, mask):
-        """Calculate whether patch passes filter based on class in mask.
+        """Calculate whether patch passes filter based on value in bands.
 
         Parameters
         ----------

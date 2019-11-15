@@ -1,5 +1,6 @@
 from setuptools import setup
 
+
 setup(
    name='eo4ai',
    description='Tools for preprocessing Earth Observation datasets',

@@ -1,4 +1,5 @@
 import numpy as np
+
 from eo4ai.utils import encoders
 
 
@@ -106,6 +107,5 @@ def test_MapByValueEncoder():
     # Type of array is bool
     assert enc_mask.dtype == np.bool
 
-
-if __name__ == '__main__':
-    test_MapByColourEncoder()
+    # Classes are preserved
+    assert class_ids == tuple(dataset_metadata['mask']['classes'].keys())
