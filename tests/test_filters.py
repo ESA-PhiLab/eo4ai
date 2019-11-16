@@ -68,5 +68,51 @@ def test_FilterByBandValue():
     assert filter5(bands10, mask)
 
 
-if __name__ == '__main__':
-    test_FilterByBandValue()
+def test_FilterByMaskClass():
+
+    bands = None
+    mask0 = np.concatenate(
+                        (np.ones((10, 10, 1)), np.zeros((10, 10, 1))),
+                        axis=2
+                        )
+    mask1 = np.concatenate(
+                        (np.zeros((10, 10, 1)), np.ones((10, 10, 1))),
+                        axis=2
+                        )
+
+    mask2 = copy.copy(mask0)
+    mask2[2, 4, :] = [0, 1]
+    mask3 = copy.copy(mask1)
+    mask3[5, 3, :] = [1, 0]
+    mask4 = np.concatenate((mask0, mask1), axis=1)
+    mask5 = np.concatenate((mask0, mask0, mask1), axis=1)
+    mask6 = np.concatenate((mask1, mask0, mask1), axis=1)
+    mask7 = np.zeros((10, 10, 4))
+
+    filter0 = filters.FilterByMaskClass(target_index=0)
+    filter1 = filters.FilterByMaskClass(target_index=1)
+    filter2 = filters.FilterByMaskClass(target_index=0, threshold=0.5)
+    filter3 = filters.FilterByMaskClass()
+    assert not filter0(bands, mask0)
+    assert filter0(bands, mask1)
+    assert not filter0(bands, mask2)
+    assert not filter0(bands, mask3)
+    assert not filter0(bands, mask4)
+
+    assert filter1(bands, mask0)
+    assert not filter1(bands, mask1)
+    assert not filter1(bands, mask2)
+    assert not filter1(bands, mask3)
+    assert not filter1(bands, mask4)
+
+    assert not filter2(bands, mask0)
+    assert filter2(bands, mask1)
+    assert not filter2(bands, mask2)
+    assert filter2(bands, mask3)
+    assert filter2(bands, mask4)
+    assert not filter2(bands, mask5)
+    assert filter2(bands, mask6)
+
+    assert filter3(bands, mask0)
+    assert filter3(bands, mask1)
+    assert not filter3(bands, mask7)
