@@ -23,8 +23,12 @@ class Encoder(ABC):
     """
     def __init__(self, dataset_metadata):
         self.dataset_metadata = dataset_metadata
-        self.classes = self.dataset_metadata['mask']['classes']
-        self.class_ids, self.patterns = zip(*self.classes.items())
+        try:
+            self.classes = self.dataset_metadata['mask']['classes']
+            self.class_ids, self.patterns = zip(*self.classes.items())
+        except (TypeError, KeyError, AttributeError) as exc:
+            print('Invalid dataset_metadata: ', exc)
+            raise exc
 
     @abstractmethod
     def __call__(self, *args, **kwargs):
