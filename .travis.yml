@@ -1,4 +1,10 @@
 language: python
 
+install:
+  - pip install -U pip
 script:
-- echo "hello world"
+ - pip install -r requirements.txt
+ - python setup.py install
+ - pip install flake8
+ - flake8 --statistics
+ - pytest
