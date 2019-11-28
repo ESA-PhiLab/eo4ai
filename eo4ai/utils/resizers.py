@@ -65,11 +65,16 @@ class BandsMaskResizer:
 
         # MASK
         if not all(np.array(mask.shape[:2]) == np.array(mask_target_size)):
+            flat_mask = np.argmax(mask, axis=-1)
             rescaled_mask = cv2.resize(
-                                    mask.astype(np.uint8),
+                                    flat_mask.astype(np.uint8),
                                     mask_target_size[::-1],
                                     cv2.INTER_NEAREST
                                     ).astype(bool)
+            rescaled_mask = np.stack([
+                                    rescaled_mask[:, :] == value
+                                    for value in range(mask.shape[-1])
+                                    ], axis=-1).astype(np.bool)
         else:
             rescaled_mask = mask
 
