@@ -3,9 +3,11 @@ import pytest
 
 from eo4ai.utils import encoders
 
+
 class StubEncoder(encoders.Encoder):
     def __call__(self):
         pass
+
 
 def test_Encoder():
 
@@ -28,7 +30,7 @@ def test_Encoder():
       'CLASS4': [1.1]
       }}}
 
-    bad_metadata2 = {'mask': {'classes':[{
+    bad_metadata2 = {'mask': {'classes': [{
       'CLASS1': [1],
       'CLASS2': [0],
       'CLASS3': [-3],
@@ -71,8 +73,6 @@ def test_MapByColourEncoder():
       'CLASS3': [-3],
       'CLASS4': [1.1]
       }}}
-
-
 
     encoder1 = encoders.MapByColourEncoder(dataset_metadata1)
     encoder2 = encoders.MapByColourEncoder(dataset_metadata2)
