@@ -24,6 +24,9 @@ class Dataset(ABC):
         self.jobs = jobs
         for k, v in kwargs.items():
             setattr(self, k, v)
+        self.metadata_file = self.get_dataset_metadata()
+
+    def get_dataset_metadata(self):
         metadata_file = os.path.join(
                                 os.path.abspath(os.path.dirname(__file__)),
                                 '..',
