@@ -4,12 +4,12 @@ import pytest
 from eo4ai.utils import encoders
 
 
-class StubEncoder(encoders.Encoder):
+class DummyEncoder(encoders.Encoder):
     def __call__(self):
         pass
 
 
-def test_Encoder():
+def test_Encoder_exceptions():
 
     good_metadata = {
         'mask': {
@@ -44,16 +44,16 @@ def test_Encoder():
     bad_metadata5 = [1, 3, 6]
     bad_metadata6 = 'string value'
 
-    StubEncoder(good_metadata)
+    DummyEncoder(good_metadata)
     with pytest.raises(KeyError):
-        StubEncoder(bad_metadata1)
+        DummyEncoder(bad_metadata1)
     with pytest.raises(AttributeError):
-        StubEncoder(bad_metadata2)
-        StubEncoder(bad_metadata3)
+        DummyEncoder(bad_metadata2)
+        DummyEncoder(bad_metadata3)
     with pytest.raises(TypeError):
-        StubEncoder(bad_metadata4)
-        StubEncoder(bad_metadata5)
-        StubEncoder(bad_metadata6)
+        DummyEncoder(bad_metadata4)
+        DummyEncoder(bad_metadata5)
+        DummyEncoder(bad_metadata6)
 
 
 def test_MapByColourEncoder():
