@@ -27,7 +27,7 @@ if __name__ == '__main__':
                             default=30)
     arg_parser.add_argument('-p', '--patch_size', type=int,
                             help='Size in pixels of each output patch',
-                            default=256)
+                            default=None)
     arg_parser.add_argument('-t', '--nodata_threshold', type=float,
                             help='Fraction of patch that can have no-data'
                                  'values and still be used',
