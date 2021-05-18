@@ -70,7 +70,7 @@ class BandsMaskResizer:
                                     flat_mask.astype(np.uint8),
                                     mask_target_size[::-1],
                                     cv2.INTER_NEAREST
-                                    ).astype(bool)
+                                    )
             rescaled_mask = np.stack([
                                     rescaled_mask[:, :] == value
                                     for value in range(mask.shape[-1])
@@ -95,7 +95,7 @@ class BandsMaskResizer:
             = self.dataset_metadata['mask']['resolution']/resolution
         mask_target_size = (
                             round(mask.shape[0] * mask_scale_factor),
-                            round(mask.shape[1]*mask_scale_factor)
+                            round(mask.shape[1] * mask_scale_factor)
                             )
         if self.strict and len(set(band_target_sizes)) > 1:
             raise Exception(
