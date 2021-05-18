@@ -570,9 +570,6 @@ class S2CESBIO38(Dataset):
         self.metadatasaver(self.output_metadata, output_paths)
 
 
-
-
-
 class S2IRIS513(Dataset):
     def __init__(self, **kwargs):
         super().__init__(dataset_id='S2IRIS513', **kwargs)
@@ -618,26 +615,28 @@ class S2IRIS513(Dataset):
         self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
 
     def get_scenes(self):
-        scenes = []
-        image_ids = os.listdir(os.path.join(self.in_path,'subscenes'))
-        mask_ids = os.listdir(os.path.join(self.in_path,'masks'))
-        assert set(image_ids) == set(mask_ids), 'Different scenes in images and masks!'
+        image_ids = os.listdir(os.path.join(self.in_path, 'subscenes'))
+        mask_ids = os.listdir(os.path.join(self.in_path, 'masks'))
+        assert set(image_ids) == set(mask_ids), 'Different scenes in images' \
+                                                'and masks!'
 
-        return [id.replace('.npy','') for id in image_ids]
+        return [id.replace('.npy', '') for id in image_ids]
 
     def process_scene(self, scene_id):
         # Find scene's files
         band_file = self.filefinder(scene_id, dir_substrings='subscenes')
-        mask_file = self.filefinder(scene_id,dir_substrings='masks')
+        mask_file = self.filefinder(scene_id, dir_substrings='masks')
         # Load bands, mask and metadata
-        bands,band_ids = self.bandloader(band_file,list(self.dataset_metadata['band_files'].keys())[0])
+        bands, band_ids = self.bandloader(
+                            band_file,
+                            list(self.dataset_metadata['band_files'].keys())[0]
+                            )
 
         mask = self.maskloader(mask_file)
         class_ids = list(self.dataset_metadata['mask']['classes'].keys())
 
         # Resize bands and mask
         bands, mask = self.resizer(bands, band_ids, mask, self.resolution)
-
 
         # Split into patches
         band_patches, mask_patches, patch_ids = self.splitter(bands, mask)

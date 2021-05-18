@@ -44,7 +44,6 @@ class SlidingWindowSplitter:
             step_x = self.stride
             step_y = self.stride
 
-
             # pre-allocated for efficiency
             bands_patches = np.empty((
                                     n_x * n_y,
@@ -62,8 +61,14 @@ class SlidingWindowSplitter:
             num_valid_patches = 0
             for i in range(n_x):
                 for j in range(n_y):
-                    region = slice(i * step_x, i * step_x + self.patch_size), \
-                             slice(j * step_y, j * step_y + self.patch_size), ...
+                    region = slice(
+                                i * step_x,
+                                i * step_x + self.patch_size
+                                ), \
+                             slice(
+                                j * step_y,
+                                j * step_y + self.patch_size
+                                ), ...
                     bands_patch = bands[region]
                     mask_patch = mask[region]
 

@@ -90,7 +90,7 @@ class Landsat8Normaliser(LandsatNormaliser):
             band = (band - bm['MINIMUM_BT']) \
                 / (bm['MAXIMUM_BT'] - bm['MINIMUM_BT'])
 
-        if bm.get('solar_correction',False):
+        if bm.get('solar_correction', False):
             band /= math.sin(
                         float(self.scene_metadata['SUN_ELEVATION'])
                         * math.pi / 180
