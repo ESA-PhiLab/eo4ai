@@ -1,7 +1,7 @@
 Glymur==0.8.18
 numpy==1.17.4
 opencv-python==4.1.1.26
-pyyaml==5.1.2
+pyyaml==5.4
 scikit-image==0.16.2
 sentinelsat==0.13
 spectral==0.20
