@@ -30,6 +30,10 @@ This package aims to provide users with a pre-prepared dataset ready immediately
 ### **Sentinel-2: ALCD**<sup>[link](https://zenodo.org/record/1460961#.XYCTRzYzaHt)</sup> *(Baetens et al., 2018)*
 38 Sentinel-2 scenes annotated through an "active learning" system. Data provided in native band resolutions (10m - 60m). Does not include the parent scenes, only the masks. Therefore we include a download tool to retrieve the relevant scenes from the Copernicus Open Access Hub, for which a username and password is needed.
 
+### **Sentinel-2: IRIS**<sup>[link](https://zenodo.org/record/4172871)</sup> *(Francis et al., 2020)*
+513 subscenes from Sentinel-2. Each image and mask pair is 1022 pixels across.
+
+
 
 
 ## Credits and Contributions
