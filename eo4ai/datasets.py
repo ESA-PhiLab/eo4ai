@@ -3,6 +3,7 @@ from concurrent.futures import ProcessPoolExecutor
 import getpass
 import glymur
 import json
+import netCDF4 as nc
 import numpy as np
 import os
 from sentinelsat import SentinelAPI
@@ -634,6 +635,114 @@ class S2IRIS513(Dataset):
 
         mask = self.maskloader(mask_file)
         class_ids = list(self.dataset_metadata['mask']['classes'].keys())
+
+        # Resize bands and mask
+        bands, mask = self.resizer(bands, band_ids, mask, self.resolution)
+
+        # Split into patches
+        band_patches, mask_patches, patch_ids = self.splitter(bands, mask)
+
+        # Get output_metadata
+        self.output_metadata = self.outputmetadatawriter(
+                                                    scene_id,
+                                                    band_ids,
+                                                    class_ids,
+                                                    resolution=self.resolution
+                                                    )
+        # Get directories for outputs
+        output_paths = self.outputorganiser(self.out_path, scene_id, patch_ids)
+        # Save data
+        self.datasaver(
+                    band_patches,
+                    mask_patches,
+                    self.descriptors,
+                    output_paths
+                    )
+
+        # Save metadata
+        self.metadatasaver(self.output_metadata, output_paths)
+
+class S2KappaZeta155(Dataset):
+    def __init__(self, **kwargs):
+        super().__init__(dataset_id='S2KappaZeta155', **kwargs)
+
+        self.filefinder = filefinders.FileFinderBySubStrings(self.in_path)
+        self.bandloader = loaders.SingleFileBandLoader(
+                                                    self.dataset_metadata,
+                                                    imread=self._band_imread
+                                                    )
+        self.maskloader = loaders.ImageLoader(
+                                            self.dataset_metadata,
+                                            imread=self._mask_imread
+                                            )
+        self.encoder = encoders.MapByValueEncoder(self.dataset_metadata)
+        self.descriptorloader = loaders.SimpleSpectralDescriptorsLoader(
+                                                        self.dataset_metadata
+                                                        )
+        self.descriptors = self.descriptorloader(
+                                                band_ids=self.selected_band_ids
+                                                )
+
+        self.resizer = resizers.BandsMaskResizer(
+                                                self.dataset_metadata,
+                                                to_array=True,
+                                                strict=False
+                                                )
+
+        self.splitter = splitters.SlidingWindowSplitter(
+                                        self.patch_size,
+                                        self.stride,
+                                        filters=[filters.FilterByMaskClass(
+                                            threshold=self.nodata_threshold,
+                                            target_index=[0,5]
+                                            )]
+                                        )
+
+        self.outputmetadatawriter = writers.LandsatMetadataWriter(
+                                                        self.dataset_metadata,
+                                                        sun_elevation=False
+                                                        )
+        self.outputorganiser = misc.BySceneAndPatchOrganiser()
+        self.datasaver = savers.ImageMaskDescriptorNumpySaver(overwrite=True)
+        self.metadatasaver = savers.MetadataJsonSaver(overwrite=True)
+
+    def _band_imread(self,filename):
+        ds = nc.Dataset(filename)
+        bands = np.array([ds[b] for b in self.dataset_metadata['bands'].keys()])
+        bands = np.moveaxis(bands,0,-1)
+        return bands
+
+    @staticmethod
+    def _mask_imread(filename):
+        ds = nc.Dataset(filename)
+        mask = np.array(ds['Label'])
+        return mask
+
+    def get_scenes(self):
+        scenes = []
+        for root,dirs,paths in os.walk(self.in_path):
+            for p in paths:
+                if p.endswith('.nc'):
+                    scenes.append(p.replace('.nc',''))
+        return scenes
+
+    def process_scene(self, scene_id):
+
+        # Parse scene_id
+        filename = os.path.basename(scene_id)
+        dir_str = os.path.dirname(scene_id)
+
+        # Find scene's files
+        band_file = self.filefinder(filename+'.nc')
+        mask_file = self.filefinder(filename+'.nc')
+        # Load bands, mask and metadata
+        bands, band_ids = self.bandloader(
+                            band_file,
+                            list(self.dataset_metadata['band_files'].keys())[0]
+                            )
+
+        mask = self.maskloader(mask_file)
+        mask, class_ids = self.encoder(mask)
 
         # Resize bands and mask
         bands, mask = self.resizer(bands, band_ids, mask, self.resolution)

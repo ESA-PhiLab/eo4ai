@@ -33,7 +33,8 @@ This package aims to provide users with a pre-prepared dataset ready immediately
 ### **Sentinel-2: IRIS**<sup>[link](https://zenodo.org/record/4172871)</sup> *(Francis et al., 2020)*
 513 subscenes from Sentinel-2. Each image and mask pair is 1022 pixels across.
 
-
+### **Sentinel-2: KappaZeta**<sup>[link](https://zenodo.org/record/5095024)</sup> *(Domnich et al., 2021)*
+4403 subscenes from 155 Sentinel-2 products. Each image and mask pair is 512 pixels across at 10 m/pixel resolution.
 
 
 ## Credits and Contributions

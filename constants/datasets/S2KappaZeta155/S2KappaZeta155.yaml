@@ -1,0 +1,140 @@
+---
+spacecraft_id: Sentinel2
+bands:
+  B01:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 443
+        band_width: 36
+        resolution: 10
+        descriptive_name: 'Aerosol'
+  B02:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 494
+        band_width: 96
+        resolution: 10
+        descriptive_name: 'Blue'
+  B03:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 560
+        band_width: 45
+        resolution: 10
+        descriptive_name: 'Green'
+  B04:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 665
+        band_width: 39
+        resolution: 10
+        descriptive_name: 'Red'
+  B05:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 704
+        band_width: 20
+        resolution: 10
+        descriptive_name: 'Red Edge 1'
+  B06:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 740
+        band_width:  18
+        resolution: 10
+        descriptive_name: 'Red Edge 2'
+  B07:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 781
+        band_width: 28
+        resolution: 10
+        descriptive_name: 'Red Edge 3'
+  B08:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 834
+        band_width: 141
+        resolution: 10
+        descriptive_name: 'NIR'
+
+  B8A:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 864
+        band_width: 33
+        resolution: 10
+        descriptive_name: 'Red Edge 4'
+
+  B09:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 944
+        band_width: 27
+        resolution: 10
+        descriptive_name: 'Water Vapour'
+
+  B10:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 1375
+        band_width: 76
+        resolution: 10
+        descriptive_name: 'Cirrus'
+
+  B11:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 1612
+        band_width: 142
+        resolution: 10
+        descriptive_name: 'SWIR1'
+
+  B12:
+        type: TOA Reflectance
+        gain: 1
+        offset: 0
+        solar_correction: False
+        band_centre: 2194
+        band_width: 240
+        resolution: 10
+        descriptive_name: 'SWIR2'
+
+band_files:
+  id: ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B09','B10','B11','B12']
+
+mask:
+  mask_file: id
+  classes:
+      missing: 0
+      clear: 1
+      shadow: 2
+      thin_cloud: 3
+      thick_cloud: 4
+      undefined: 5
+  resolution: 10
+...
