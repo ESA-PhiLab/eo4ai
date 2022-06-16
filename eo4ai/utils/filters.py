@@ -88,8 +88,13 @@ class FilterByMaskClass:
         bool
             True if patch has passed filter, False otherwise.
         """
-        if self.target_index is not None:  # Use specific class as no_data mask
-            is_target = mask[..., self.target_index]
+        if self.target_index is not None:
+            if isinstance(self.target_index,list): # Use list of classes as no_data mask
+                is_target = np.any(mask[..., self.target_index] == 1, axis=-1)
+            elif isinstance(self.target_index,int): # Use specific class as no_data mask
+                is_target = mask[..., self.target_index]
+            else:
+                raise TypeError('target_index should be an int or list of ints')
         else:   # Use places for which there are no labels as no_data
             is_target = np.all(mask == 0, axis=-1)
 
