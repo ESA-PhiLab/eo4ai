@@ -710,6 +710,8 @@ class S2KappaZeta155(Dataset):
         ds = nc.Dataset(filename)
         bands = np.array([ds[b] for b in self.dataset_metadata['bands'].keys()])
         bands = np.moveaxis(bands,0,-1)
+        # Conversion to reflectance 0->1 (not worth writing a custom normaliser for)
+        bands *= 6.5535
         return bands
 
     @staticmethod
